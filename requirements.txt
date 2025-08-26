@@ -1,0 +1,32 @@
+# Web API
+fastapi
+uvicorn[standard]
+
+# Telegram bot
+aiogram
+
+# Background tasks
+arq
+
+# Database
+peewee
+
+# Redis
+redis
+
+# HTTP clients
+httpx
+
+# Scraping
+playwright
+
+# Settings/validation
+pydantic
+pydantic-settings
+
+# Logging
+structlog
+
+# Testing
+pytest
+pytest-asyncio
