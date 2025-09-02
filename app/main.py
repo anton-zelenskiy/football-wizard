@@ -9,10 +9,9 @@ import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.admin_routes import router as admin_router
 from app.api.legacy_routes import router as legacy_router
-from app.api.routes import router as api_router
 from app.api.livesport_scraper import LivesportScraper
+from app.api.routes import router as api_router
 from app.betting_rules import BettingRulesEngine
 from app.db.models import create_tables
 from app.db.storage import FootballDataStorage
@@ -64,7 +63,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(api_router)
-app.include_router(admin_router)
 app.include_router(legacy_router)
 
 

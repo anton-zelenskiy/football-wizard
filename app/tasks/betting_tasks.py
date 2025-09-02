@@ -55,7 +55,8 @@ class BettingTasks:
             # First, scrape and save live matches
             live_matches_data = await self.scraper.scrape_live_matches()
             if live_matches_data:
-                self.storage.save_live_matches(live_matches_data)
+                # Save all live matches using batch method
+                self.storage.save_live_matches_batch(live_matches_data)
                 logger.info(f'Saved {len(live_matches_data)} live matches')
 
             # Analyze live matches for betting opportunities
@@ -100,13 +101,14 @@ class BettingTasks:
                 logger.info(f'Processing {country}: {league_name}')
 
                 # Save league if it doesn't exist
-                self.storage.save_leagues(
-                    [{'league': {'name': league_name}, 'country': {'name': country}}]
+                self.storage.save_league(
+                    {'league': {'name': league_name}, 'country': {'name': country}}
                 )
 
                 # Save team standings
                 if standings:
-                    self.storage.save_league_standings(standings, league_name, country)
+                    for team in standings:
+                        self.storage.save_team_standings(team, league_name, country)
                     logger.info(
                         f'Saved {len(standings)} team standings for {country} - {league_name}'
                     )
@@ -118,7 +120,8 @@ class BettingTasks:
 
                 # Save fixtures
                 if fixtures:
-                    self.storage.save_fixtures(fixtures, league_name, country)
+                    for fixture in fixtures:
+                        self.storage.save_fixture(fixture, league_name, country)
                     logger.info(f'Saved {len(fixtures)} fixtures for {country} - {league_name}')
 
             # Update betting outcomes for finished matches
@@ -140,7 +143,8 @@ class BettingTasks:
             live_matches = await self.scraper.scrape_live_matches()
 
             if live_matches:
-                self.storage.save_live_matches(live_matches)
+                # Save all live matches using batch method
+                self.storage.save_live_matches_batch(live_matches)
                 logger.info(f'Saved {len(live_matches)} live matches')
                 return f'Updated {len(live_matches)} live matches'
             else:

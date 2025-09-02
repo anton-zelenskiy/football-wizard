@@ -12,65 +12,25 @@ class FootballDataStorage:
     def __init__(self) -> None:
         self.db = db
 
-    def save_leagues(self, leagues_data: list[dict[str, Any]]) -> None:
-        """Save leagues from API data"""
+    def save_league(self, league_data: dict[str, Any]) -> None:
+        """Save a single league from API data"""
         with self.db.atomic():
-            for league_data in leagues_data:
-                league_info = league_data.get('league', {})
-                country_info = league_data.get('country', {})
+            league_info = league_data.get('league', {})
+            country_info = league_data.get('country', {})
 
-                league, created = League.get_or_create(
-                    name=league_info.get('name', ''),
-                    country=country_info.get('name', ''),
-                )
-                if created:
-                    logger.info(f'Created new league: {league.name}')
-
-    def save_teams(self, teams_data: list[dict[str, Any]], league_name: str, country: str) -> None:
-        """Save teams from API data"""
-        try:
-            league = League.get((League.name == league_name) & (League.country == country))
-        except League.DoesNotExist:
-            logger.error(f'League not found: {country} - {league_name}')
-            return
-
-        with self.db.atomic():
-            for team_data in teams_data:
-                team_info = team_data.get('team', {})
-                stats = team_data.get('statistics', [])
-
-                # Extract team stats if available
-                team_stats = {}
-                if stats:
-                    team_stats = stats[0] if isinstance(stats, list) else stats
-
-                team, created = Team.get_or_create(
-                    name=team_info.get('name', ''),
-                    league=league,
-                    defaults={
-                        'rank': team_stats.get('rank'),
-                        'games_played': team_stats.get('games', {}).get('appearences', 0),
-                        'wins': team_stats.get('games', {}).get('wins', 0),
-                        'draws': team_stats.get('games', {}).get('draws', 0),
-                        'losses': team_stats.get('games', {}).get('loses', 0),
-                        'goals_scored': team_stats.get('goals', {}).get('for', {}).get('total', 0),
-                        'goals_conceded': team_stats.get('goals', {})
-                        .get('against', {})
-                        .get('total', 0),
-                        'points': team_stats.get('league', {})
-                        .get('standings', [{}])[0]
-                        .get('points', 0),
-                    },
-                )
-                if created:
-                    logger.info(f'Created new team: {team.name}')
+            league, created = League.get_or_create(
+                name=league_info.get('name', ''),
+                country=country_info.get('name', ''),
+            )
+            if created:
+                logger.info(f'Created new league: {league.name}')
 
     def update_match_status(self, match: Match, new_status: str, **kwargs) -> None:
         """Update match status and related fields, handling lifecycle transitions"""
         old_status = match.status
         match.status = new_status
         match.updated_at = datetime.now()
-        
+
         # Handle status-specific field updates
         if new_status == 'live':
             # Set live-specific fields
@@ -81,7 +41,7 @@ class FootballDataStorage:
                 match.home_score = kwargs['home_score']
             if 'away_score' in kwargs:
                 match.away_score = kwargs['away_score']
-                
+
         elif new_status == 'finished':
             # Clear live-specific fields when match finishes (set to defaults)
             match.minute = None
@@ -92,7 +52,7 @@ class FootballDataStorage:
                 match.home_score = kwargs['home_score']
             if 'away_score' in kwargs:
                 match.away_score = kwargs['away_score']
-                
+
         elif new_status == 'scheduled':
             # Clear live/finished specific fields (set to defaults)
             match.minute = None
@@ -100,9 +60,11 @@ class FootballDataStorage:
             match.red_cards_away = 0  # Set to default value, not None
             match.home_score = None
             match.away_score = None
-        
+
         match.save()
-        logger.info(f'Updated match status: {match.home_team.name} vs {match.away_team.name} {old_status} -> {new_status}')
+        logger.info(
+            f'Updated match status: {match.home_team.name} vs {match.away_team.name} {old_status} -> {new_status}'
+        )
 
     def save_matches(
         self, fixtures_data: list[dict[str, Any]], league_name: str, country: str
@@ -147,10 +109,11 @@ class FootballDataStorage:
                 round_number = None
                 if round_text:
                     import re
+
                     match = re.search(r'(\d+)', round_text)
                     if match:
                         round_number = int(match.group(1))
-                
+
                 # Also check for round_number field
                 if round_number is None and 'round_number' in fixture_data:
                     round_number = fixture_data['round_number']
@@ -169,15 +132,12 @@ class FootballDataStorage:
                         Match.season == fixture.get('league', {}).get('season', 2024),
                         Match.round == round_number,
                     )
-                    
+
                     # Update existing match with new data using helper method
                     self.update_match_status(
-                        existing_match, 
-                        status,
-                        home_score=home_score,
-                        away_score=away_score
+                        existing_match, status, home_score=home_score, away_score=away_score
                     )
-                    
+
                 except Match.DoesNotExist:
                     # Create new match only if it doesn't exist
                     match = Match.create(
@@ -191,73 +151,77 @@ class FootballDataStorage:
                         round=round_number,
                         status=status,
                     )
-                    logger.info(f'Created new match: {home_team.name} vs {away_team.name} ({status})')
+                    logger.info(
+                        f'Created new match: {home_team.name} vs {away_team.name} ({status})'
+                    )
+
+    def save_live_match(self, match_data: dict[str, Any]) -> None:
+        """Save a single live match from scraper - updates existing scheduled matches or creates new ones"""
+        with self.db.atomic():
+            # Find or create league
+            league, _ = League.get_or_create(
+                name=match_data.get('league', ''),
+                defaults={'country': match_data.get('country', '')},
+            )
+
+            # Find or create teams
+            home_team, _ = Team.get_or_create(name=match_data.get('home_team', ''), league=league)
+            away_team, _ = Team.get_or_create(name=match_data.get('away_team', ''), league=league)
+
+            # Get round number from match data
+            round_number = match_data.get('round_number')
+            if round_number is None:
+                logger.warning(
+                    f'Live match missing round number: {match_data.get("home_team")} vs {match_data.get("away_team")}'
+                )
+                return
+
+            # Check if match already exists using unique constraint
+            try:
+                existing_match = Match.get(
+                    Match.league == league,
+                    Match.home_team == home_team,
+                    Match.away_team == away_team,
+                    Match.season == 2024,
+                    Match.round == round_number,
+                )
+
+                # Update existing match to live status
+                self.update_match_status(
+                    existing_match,
+                    'live',
+                    home_score=match_data.get('home_score', 0),
+                    away_score=match_data.get('away_score', 0),
+                    minute=match_data.get('minute'),
+                    red_cards_home=match_data.get('red_cards_home', 0),
+                    red_cards_away=match_data.get('red_cards_away', 0),
+                )
+
+            except Match.DoesNotExist:
+                # Create new live match
+                match = Match.create(
+                    league=league,
+                    home_team=home_team,
+                    away_team=away_team,
+                    home_score=match_data.get('home_score', 0),
+                    away_score=match_data.get('away_score', 0),
+                    match_date=datetime.now(),
+                    season=2024,
+                    round=round_number,
+                    status='live',
+                    minute=match_data.get('minute'),
+                    red_cards_home=match_data.get('red_cards_home', 0),
+                    red_cards_away=match_data.get('red_cards_away', 0),
+                )
+                logger.info(f'Created new live match: {home_team.name} vs {away_team.name}')
 
     def save_live_matches(self, live_matches_data: list[dict[str, Any]]) -> None:
-        """Save live matches from scraper - updates existing scheduled matches or creates new ones"""
-        with self.db.atomic():
-            for match_data in live_matches_data:
-                # Find or create league
-                league, _ = League.get_or_create(
-                    name=match_data.get('league', ''),
-                    defaults={'country': match_data.get('country', '')},
-                )
+        """Save multiple live matches from scraper"""
+        for match_data in live_matches_data:
+            self.save_live_match(match_data)
 
-                # Find or create teams
-                home_team, _ = Team.get_or_create(
-                    name=match_data.get('home_team', ''), league=league
-                )
-                away_team, _ = Team.get_or_create(
-                    name=match_data.get('away_team', ''), league=league
-                )
-
-                # Get round number from match data
-                round_number = match_data.get('round_number')
-                if round_number is None:
-                    logger.warning(f'Live match missing round number: {match_data.get("home_team")} vs {match_data.get("away_team")}')
-                    continue
-
-                # Check if match already exists using unique constraint
-                try:
-                    existing_match = Match.get(
-                        Match.league == league,
-                        Match.home_team == home_team,
-                        Match.away_team == away_team,
-                        Match.season == 2024,
-                        Match.round == round_number,
-                    )
-                    
-                    # Update existing match to live status
-                    self.update_match_status(
-                        existing_match,
-                        'live',
-                        home_score=match_data.get('home_score', 0),
-                        away_score=match_data.get('away_score', 0),
-                        minute=match_data.get('minute'),
-                        red_cards_home=match_data.get('red_cards_home', 0),
-                        red_cards_away=match_data.get('red_cards_away', 0)
-                    )
-                    
-                except Match.DoesNotExist:
-                    # Create new live match
-                    match = Match.create(
-                        league=league,
-                        home_team=home_team,
-                        away_team=away_team,
-                        home_score=match_data.get('home_score', 0),
-                        away_score=match_data.get('away_score', 0),
-                        match_date=datetime.now(),
-                        season=2024,
-                        round=round_number,
-                        status='live',
-                        minute=match_data.get('minute'),
-                        red_cards_home=match_data.get('red_cards_home', 0),
-                        red_cards_away=match_data.get('red_cards_away', 0),
-                    )
-                    logger.info(f'Created new live match: {home_team.name} vs {away_team.name}')
-
-    def save_league_standings(
-        self, standings_data: list[dict[str, Any]], league_name: str, country: str
+    def save_team_standings(
+        self, team_data: dict[str, Any], league_name: str, country: str
     ) -> None:
         """Save league standings/team statistics"""
         try:
@@ -267,34 +231,32 @@ class FootballDataStorage:
             return
 
         with self.db.atomic():
-            for team_data in standings_data:
-                team_name = team_data.get('team', {}).get('name', '')
-                if not team_name:
-                    continue
+            team_name = team_data.get('team', {}).get('name', '')
+            if not team_name:
+                logger.error(f'Team not found: {team_data}')
+                return
 
-                team, created = Team.get_or_create(name=team_name, league=league)
+            team, created = Team.get_or_create(name=team_name, league=league)
 
-                # Update team statistics
-                team.rank = team_data.get('rank')
-                team.games_played = team_data.get('all', {}).get('played', 0)
-                team.wins = team_data.get('all', {}).get('win', 0)
-                team.draws = team_data.get('all', {}).get('draw', 0)
-                team.losses = team_data.get('all', {}).get('lose', 0)
-                team.goals_scored = team_data.get('all', {}).get('goals', {}).get('for', 0)
-                team.goals_conceded = team_data.get('all', {}).get('goals', {}).get('against', 0)
-                team.points = team_data.get('points', 0)
-                team.updated_at = datetime.now()
-                team.save()
+            # Update team statistics
+            team.rank = team_data.get('rank')
+            team.games_played = team_data.get('all', {}).get('played', 0)
+            team.wins = team_data.get('all', {}).get('win', 0)
+            team.draws = team_data.get('all', {}).get('draw', 0)
+            team.losses = team_data.get('all', {}).get('lose', 0)
+            team.goals_scored = team_data.get('all', {}).get('goals', {}).get('for', 0)
+            team.goals_conceded = team_data.get('all', {}).get('goals', {}).get('against', 0)
+            team.points = team_data.get('points', 0)
+            team.updated_at = datetime.now()
+            team.save()
 
-                if created:
-                    logger.info(f'Created new team: {team.name}')
-                else:
-                    logger.debug(f'Updated team statistics: {team.name}')
+            if created:
+                logger.info(f'Created new team: {team.name}')
+            else:
+                logger.debug(f'Updated team statistics: {team.name}')
 
-    def save_fixtures(
-        self, fixtures_data: list[dict[str, Any]], league_name: str, country: str
-    ) -> None:
-        """Save fixtures from scraper data"""
+    def save_fixture(self, fixture_data: dict[str, Any], league_name: str, country: str) -> None:
+        """Save a single fixture from scraper data"""
         try:
             league = League.get((League.name == league_name) & (League.country == country))
         except League.DoesNotExist:
@@ -302,62 +264,69 @@ class FootballDataStorage:
             return
 
         with self.db.atomic():
-            for fixture_data in fixtures_data:
-                home_team_name = fixture_data.get('home_team', '')
-                away_team_name = fixture_data.get('away_team', '')
-                match_datetime_str = fixture_data.get('match_datetime', '')
-                status = fixture_data.get('status', 'scheduled')
+            home_team_name = fixture_data.get('home_team', '')
+            away_team_name = fixture_data.get('away_team', '')
+            match_datetime_str = fixture_data.get('match_datetime', '')
+            status = fixture_data.get('status', 'scheduled')
 
-                # Get or create teams
-                home_team, _ = Team.get_or_create(name=home_team_name, league=league)
-                away_team, _ = Team.get_or_create(name=away_team_name, league=league)
+            # Get or create teams
+            home_team, _ = Team.get_or_create(name=home_team_name, league=league)
+            away_team, _ = Team.get_or_create(name=away_team_name, league=league)
 
-                # Parse match date
-                try:
-                    match_date = datetime.fromisoformat(match_datetime_str)
-                except ValueError:
-                    logger.warning(f'Invalid datetime format: {match_datetime_str}')
-                    continue
+            # Parse match date
+            try:
+                match_date = datetime.fromisoformat(match_datetime_str)
+            except ValueError:
+                logger.warning(f'Invalid datetime format: {match_datetime_str}')
+                return
 
-                # Extract round number from fixture data
-                round_text = fixture_data.get('round', '')
-                round_number = None
-                if round_text:
-                    import re
-                    match = re.search(r'(\d+)', round_text)
-                    if match:
-                        round_number = int(match.group(1))
-                
-                # Also check for round_number field
-                if round_number is None and 'round_number' in fixture_data:
-                    round_number = fixture_data['round_number']
+            # Extract round number from fixture data
+            round_text = fixture_data.get('round', '')
+            round_number = None
+            if round_text:
+                import re
 
-                # Check if fixture already exists using unique constraint
-                try:
-                    match = Match.get(
-                        Match.league == league,
-                        Match.home_team == home_team,
-                        Match.away_team == away_team,
-                        Match.season == 2025,
-                        Match.round == round_number,
-                    )
-                    # Update existing fixture
-                    self.update_match_status(match, status)
-                    
-                except Match.DoesNotExist:
-                    # Create new fixture
-                    match = Match.create(
-                        league=league,
-                        home_team=home_team,
-                        away_team=away_team,
-                        match_date=match_date,
-                        season=2025,  # Current season
-                        round=round_number,
-                        status=status,
-                        home_score=None,
-                        away_score=None,
-                    )
-                    logger.info(f'Created new fixture: {home_team.name} vs {away_team.name}')
+                match = re.search(r'(\d+)', round_text)
+                if match:
+                    round_number = int(match.group(1))
+
+            # Also check for round_number field
+            if round_number is None and 'round_number' in fixture_data:
+                round_number = fixture_data['round_number']
+
+            # Check if fixture already exists using unique constraint
+            try:
+                match = Match.get(
+                    Match.league == league,
+                    Match.home_team == home_team,
+                    Match.away_team == away_team,
+                    Match.season == 2025,
+                    Match.round == round_number,
+                )
+                # Update existing fixture
+                self.update_match_status(match, status)
+
+            except Match.DoesNotExist:
+                # Create new fixture
+                match = Match.create(
+                    league=league,
+                    home_team=home_team,
+                    away_team=away_team,
+                    match_date=match_date,
+                    season=2025,  # Current season
+                    round=round_number,
+                    status=status,
+                    home_score=None,
+                    away_score=None,
+                )
+                logger.info(f'Created new fixture: {home_team.name} vs {away_team.name}')
+
+    def save_fixtures(
+        self, fixtures_data: list[dict[str, Any]], league_name: str, country: str
+    ) -> None:
+        """Save multiple fixtures from scraper data"""
+        for fixture_data in fixtures_data:
+            self.save_fixture(fixture_data, league_name, country)
 
     def get_recent_live_matches(self, minutes: int = 5) -> list[Match]:
         """Get live matches from the last N minutes"""
@@ -452,7 +421,7 @@ class FootballDataStorage:
             'scheduled': Match.select().where(Match.status == 'scheduled').count(),
             'live': Match.select().where(Match.status == 'live').count(),
             'finished': Match.select().where(Match.status == 'finished').count(),
-            'total': Match.select().count()
+            'total': Match.select().count(),
         }
 
     def update_betting_outcomes(self) -> None:
