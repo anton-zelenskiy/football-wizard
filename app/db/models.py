@@ -2,7 +2,18 @@ import json
 from datetime import datetime
 
 import structlog
-from peewee import *
+from peewee import (
+    AutoField,
+    BooleanField,
+    CharField,
+    DateTimeField,
+    FloatField,
+    ForeignKeyField,
+    IntegerField,
+    Model,
+    SqliteDatabase,
+    TextField,
+)
 
 logger = structlog.get_logger()
 
@@ -17,10 +28,15 @@ class BaseModel(Model):
 
 class League(BaseModel):
     id = AutoField()
-    name = CharField(unique=True)
+    name = CharField()
     country = CharField(null=True)
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        indexes = (
+            (('name', 'country'), True),  # Unique constraint on name + country
+        )
 
 
 class Team(BaseModel):
@@ -49,13 +65,19 @@ class Match(BaseModel):
     away_score = IntegerField(null=True)
     match_date = DateTimeField()
     season = IntegerField()
-    round = CharField(null=True)  # Round information (e.g., "Round 6")
+    round = IntegerField(null=True)  # Round number (e.g., 1, 2, 3, etc.)
     status = CharField(default='scheduled')  # scheduled, live, finished, cancelled
     minute = IntegerField(null=True)  # Current minute for live matches
     red_cards_home = IntegerField(default=0)
     red_cards_away = IntegerField(default=0)
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        indexes = (
+            # Unique constraint to prevent duplicate matches
+            (('league', 'home_team', 'away_team', 'season', 'round'), True),
+        )
 
 
 class BettingOpportunity(BaseModel):
@@ -66,6 +88,7 @@ class BettingOpportunity(BaseModel):
     confidence_score = FloatField(default=0.0)  # 0.0 to 1.0
     details = TextField()  # JSON string with additional details
     is_active = BooleanField(default=True)
+    outcome = CharField(null=True)  # win, lose, pending, cancelled
     created_at = DateTimeField(default=datetime.now)
     notified_at = DateTimeField(null=True)
 
@@ -106,11 +129,8 @@ class NotificationLog(BaseModel):
 def create_tables() -> None:
     """Create all database tables"""
     with db:
-        db.create_tables([
-            League, Team, Match, BettingOpportunity, 
-            TelegramUser, NotificationLog
-        ])
-        logger.info("Database tables created")
+        db.create_tables([League, Team, Match, BettingOpportunity, TelegramUser, NotificationLog])
+        logger.info('Database tables created')
 
 
 # Initialize database

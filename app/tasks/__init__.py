@@ -1,1 +1,18 @@
-# Background tasks module 
+"""Tasks module for background job processing"""
+
+from .betting_tasks import BettingTasks
+from .betting_tasks import (
+    daily_scheduled_analysis,
+    live_matches_analysis,
+    refresh_league_data,
+    refresh_live_matches,
+)
+
+__all__ = [
+    'BettingTasks',
+    'daily_scheduled_analysis',
+    'live_matches_analysis', 
+    'data_sync',
+    'refresh_league_data',
+    'refresh_live_matches',
+] 

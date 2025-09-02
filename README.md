@@ -51,12 +51,12 @@ app/
 ├── telegram/
 │   └── bot.py                   # Telegram bot implementation
 ├── tasks/
-│   ├── betting_tasks.py         # Background tasks (arq)
-│   └── league_tasks.py          # League scraping background tasks
+│   ├── __init__.py              # Tasks module exports
+│   └── betting_tasks.py         # All background tasks (betting, league, data sync)
 ├── betting_rules.py             # Betting rules engine
 ├── settings.py                  # Application settings
 ├── main.py                      # FastAPI application
-└── worker.py                    # ARQ worker script
+└── worker.py                    # ARQ worker with cron scheduling
 ```
 
 ## Quick Start
@@ -126,8 +126,9 @@ The application provides comprehensive API endpoints for league data:
 
 #### League Data
 - `GET /leagues` - Get all available leagues
-- `GET /leagues/{league_name}/teams` - Get teams for a specific league
-- `GET /leagues/{league_name}/matches` - Get matches for a specific league
+- `GET /leagues/{country}/{league_name}/teams` - Get teams for a specific league
+- `GET /leagues/{country}/{league_name}/matches` - Get matches for a specific league
+- `GET /leagues/{country}/{league_name}/fixtures` - Get upcoming fixtures for a specific league
 - `GET /matches/live` - Get all currently live matches
 - `GET /stats/leagues` - Get statistics about all leagues
 
@@ -142,16 +143,24 @@ The application provides comprehensive API endpoints for league data:
 
 ### 6. Background Tasks
 
-The application runs several background tasks using ARQ:
+The application runs several background tasks using ARQ with cron scheduling:
 
-- **Live matches refresh**: Every 3 minutes
-- **League data refresh**: Every 6 hours  
-- **Daily team statistics**: Every day at 9 AM UTC
+- **Live matches analysis**: Every 3 minutes
+- **Live matches refresh**: Every 5 minutes
+- **Data sync**: Every 6 hours
+- **League data refresh**: Every 6 hours (offset)
+- **Daily scheduled analysis**: Every day at 9 AM UTC
+- **Daily team statistics**: Every day at 8 AM UTC
+- **Cleanup**: Every day at 2 AM UTC
 
 To run the background worker manually:
 
 ```bash
-python run_worker.py
+# Using the provided script
+./run_worker.sh
+
+# Or directly with Python
+python3 -m app.worker
 ```
 
 ### 7. Test TheSportsDB API
@@ -202,21 +211,35 @@ python test_thesportsdb.py
 
 The application uses `arq` for background task processing:
 
-### Scheduled Tasks
-- **Daily Analysis**: Runs at 9 AM UTC daily
+### Scheduled Tasks (Cron)
+- **Daily Scheduled Analysis**: Runs at 9 AM UTC daily
+- **Live Matches Analysis**: Runs every 3 minutes
+- **Live Matches Refresh**: Runs every 5 minutes
 - **Data Sync**: Runs every 6 hours
-- **Live Match Monitoring**: Runs every 3 minutes
+- **League Data Refresh**: Runs every 6 hours (offset)
+- **Daily Team Statistics**: Runs at 8 AM UTC daily
 - **Cleanup**: Runs daily at 2 AM UTC
 
 ### Manual Task Execution
 
 ```bash
-# Start arq worker
-arq app.tasks.betting_tasks.TaskSettings
+# Start the unified worker
+python3 -m app.worker
 
-# Enqueue tasks manually
-arq app.tasks.betting_tasks.TaskSettings --function daily_analysis
+# Or use the provided script
+./run_worker.sh
 ```
+
+### Worker Configuration
+
+The worker runs the following tasks with cron scheduling:
+- **Live matches analysis**: Every 3 minutes
+- **Live matches refresh**: Every 5 minutes
+- **Data sync**: Every 6 hours
+- **League data refresh**: Every 6 hours (offset)
+- **Daily scheduled analysis**: Every day at 9 AM UTC
+- **Daily team statistics**: Every day at 8 AM UTC
+- **Cleanup**: Every day at 2 AM UTC
 
 ## Telegram Bot Commands
 

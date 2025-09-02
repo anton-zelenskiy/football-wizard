@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   web:
     build: .
@@ -9,14 +7,28 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=sqlite:///./app.db
-      - API_FOOTBALL_KEY=${API_FOOTBALL_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     depends_on:
       - redis
     networks:
       - football-network
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: .
+    command: arq app.worker.WorkerSettings
+    volumes:
+      - .:/code
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:///./app.db
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    depends_on:
+      - redis
+    networks:
+      - football-network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine

@@ -444,6 +444,7 @@ bot_instance: BettingBot | None = None
 
 
 def get_bot() -> BettingBot:
+    return
     """Get or create bot instance"""
     global bot_instance
     if bot_instance is None:
