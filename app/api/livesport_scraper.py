@@ -95,7 +95,6 @@ class LivesportScraper:
                 try:
                     await page.wait_for_selector('text=LIVE', timeout=30000)
                     live_tab = page.get_by_text('LIVE', exact=True)
-                    logger.info('Found LIVE tab')
                 except TimeoutError:
                     logger.warning('LIVE tab not found, trying alternative selectors')
                     live_tab = await page.query_selector(
@@ -106,7 +105,6 @@ class LivesportScraper:
                         return []
 
                 if live_tab:
-                    logger.info('Clicking LIVE tab')
                     await live_tab.click()
                     logger.info('Clicked LIVE tab')
                     await page.wait_for_timeout(5000)
@@ -216,18 +214,19 @@ class LivesportScraper:
                             home_score = int(score_home) if score_home.isdigit() else 0
                             away_score = int(score_away) if score_away.isdigit() else 0
 
-                            match_data = {
-                                'home_team': home,
-                                'away_team': away,
-                                'league': current_league,
-                                'country': current_country,
-                                'home_score': home_score,
-                                'away_score': away_score,
-                                'minute': minute,
-                                'red_cards_home': red_cards_home,
-                                'red_cards_away': red_cards_away,
-                                'status': 'live',
-                            }
+                            # Create common match format
+                            match_data = self._create_common_match_data(
+                                home_team=home,
+                                away_team=away,
+                                league=current_league,
+                                country=current_country,
+                                home_score=home_score,
+                                away_score=away_score,
+                                status='live',
+                                minute=minute,
+                                red_cards_home=red_cards_home,
+                                red_cards_away=red_cards_away,
+                            )
 
                             results.append(match_data)
                             logger.info(
@@ -397,14 +396,14 @@ class LivesportScraper:
                         # Get round information
                         round_text = await round_container.inner_text()
                         round_info = round_text.strip() if round_text else None
-                        
+
                         # Extract round number from round text
                         round_number = None
                         if round_info:
                             match = re.search(r'(\d+)', round_info)
                             if match:
                                 round_number = int(match.group(1))
-                                round_info = f"Round {round_number}"
+                                round_info = f'Round {round_number}'
 
                         # Find matches that belong to this specific round
                         # We need to iterate through siblings until we hit the next round
@@ -496,23 +495,18 @@ class LivesportScraper:
                                     if date_text:
                                         match_date = self._parse_match_date(date_text)
 
-                                # Extract status - assume finished for results page
-                                status = 'FT'
-
-                                match_data = {
-                                    'fixture': {
-                                        'date': match_date.isoformat() if match_date else None,
-                                        'status': {'short': status},
-                                    },
-                                    'teams': {
-                                        'home': {'name': home_team},
-                                        'away': {'name': away_team},
-                                    },
-                                    'goals': {'home': home_score, 'away': away_score},
-                                    'league': {'season': 2025},
-                                    'round': round_info,
-                                    'round_number': round_number,
-                                }
+                                # Create common match format
+                                match_data = self._create_common_match_data(
+                                    home_team=home_team,
+                                    away_team=away_team,
+                                    league=league_name,
+                                    country=country,
+                                    home_score=home_score,
+                                    away_score=away_score,
+                                    status='finished',
+                                    match_date=match_date,
+                                    round_number=round_number,
+                                )
 
                                 matches_data.append(match_data)
                                 logger.debug(
@@ -646,22 +640,6 @@ class LivesportScraper:
             logger.error(f'Error parsing date "{date_text}": {e}')
             return None
 
-    async def scrape_russian_premier_league(self) -> dict[str, Any]:
-        """Scrape Russian Premier League data as entry point"""
-        logger.info('Starting Russian Premier League scraping')
-
-        # standings = await self.scrape_league_standings('Russia', 'Premier League')
-        # matches = await self.scrape_league_matches('Russia', 'Premier League')
-        fixtures = await self.scrape_league_fixtures('Russia', 'Premier League')
-
-        return {
-            'league': 'Premier League',
-            'country': 'Russia',
-            # 'standings': standings,
-            # 'matches': matches,
-            'fixtures': fixtures,
-        }
-
     async def scrape_league_fixtures(self, country: str, league_name: str) -> list[dict[str, Any]]:
         """Scrape scheduled fixtures for a specific league"""
         logger.info(f'Scraping fixtures for {country}: {league_name}')
@@ -693,7 +671,7 @@ class LivesportScraper:
             await self._handle_cookie_banner(page)
 
             # Extract the first scheduled match only
-            fixtures = await self._extract_fixtures(page)
+            fixtures = await self._extract_fixtures(page, country, league_name)
 
             await browser.close()
             return fixtures
@@ -702,7 +680,7 @@ class LivesportScraper:
             logger.error(f'Error scraping fixtures for {country}: {league_name}: {e}')
             return []
 
-    async def _extract_fixtures(self, page) -> list[dict[str, Any]]:
+    async def _extract_fixtures(self, page, country: str, league_name: str) -> list[dict[str, Any]]:
         """Extract fixture data from the page - find first scheduled round and scrape all its matches"""
         try:
             # Find all round elements with class "event__round--static"
@@ -716,7 +694,7 @@ class LivesportScraper:
             first_round = round_elements[0]
             round_text = await first_round.text_content()
             logger.info(f'Found first scheduled round: {round_text}')
-            
+
             # Extract round number from round text
             round_number = None
             if round_text:
@@ -765,11 +743,11 @@ class LivesportScraper:
 
                 # If we're collecting matches and this looks like a match element
                 if collecting_matches and await self._is_match_element(element):
-                    fixture = await self._extract_single_fixture(element, round_text, round_number)
+                    fixture = await self._extract_single_fixture(element, country, league_name, round_number)
                     if fixture:
                         fixtures.append(fixture)
                         logger.info(
-                            f'Extracted fixture: {fixture["home_team"]} vs {fixture["away_team"]} on {fixture["date"]} at {fixture["time"]}'
+                            f'Extracted fixture: {fixture["home_team"]} vs {fixture["away_team"]} on {fixture["match_date"]}'
                         )
 
             logger.info(f'Total fixtures extracted for {round_text}: {len(fixtures)}')
@@ -809,7 +787,9 @@ class LivesportScraper:
             logger.error(f'Error checking if element is match: {e}')
             return False
 
-    async def _extract_single_fixture(self, element, round_text: str = None, round_number: int = None) -> dict[str, Any] | None:
+    async def _extract_single_fixture(
+        self, element, country: str, league_name: str, round_number: int = None
+    ) -> dict[str, Any] | None:
         """Extract a single fixture from a match element"""
         try:
             # Extract date and time from the event__time element
@@ -878,20 +858,18 @@ class LivesportScraper:
                 logger.warning(f'Could not parse datetime from: {date_time_text}')
                 return None
 
-            # Use provided round information or defaults
-            fixture_round_text = round_text if round_text else 'Round 1'
-            fixture_round_number = round_number if round_number is not None else 1
-
-            fixture = {
-                'home_team': home_team.strip(),
-                'away_team': away_team.strip(),
-                'match_datetime': match_datetime.isoformat(),
-                'date': match_datetime.strftime('%Y-%m-%d'),
-                'time': match_datetime.strftime('%H:%M'),
-                'status': 'scheduled',
-                'round': fixture_round_text,
-                'round_number': fixture_round_number,
-            }
+            # Create common match format for fixture
+            fixture = self._create_common_match_data(
+                home_team=home_team.strip(),
+                away_team=away_team.strip(),
+                league=league_name,  # Will be set by caller
+                country=country,  # Will be set by caller
+                home_score=None,
+                away_score=None,
+                status='scheduled',
+                match_date=match_datetime,
+                round_number=round_number,
+            )
 
             logger.debug(
                 f'Extracted fixture: {home_team} vs {away_team} on {date_part} at {time_part}'
@@ -989,3 +967,42 @@ class LivesportScraper:
                     continue
 
         return all_data
+
+    def _create_common_match_data(
+        self,
+        home_team: str,
+        away_team: str,
+        league: str,
+        country: str,
+        home_score: int = None,
+        away_score: int = None,
+        status: str = 'scheduled',
+        match_date: datetime = None,
+        minute: int = None,
+        red_cards_home: int = 0,
+        red_cards_away: int = 0,
+        round_number: int = None,
+    ) -> dict[str, Any]:
+        """Create a common match data structure for all match types"""
+        match_data = {
+            'home_team': home_team,
+            'away_team': away_team,
+            'league': league,
+            'country': country,
+            'home_score': home_score,
+            'away_score': away_score,
+            'status': status,
+            'round_number': round_number,
+        }
+
+        # Add optional fields if provided
+        if match_date:
+            match_data['match_date'] = match_date
+        if minute is not None:
+            match_data['minute'] = minute
+        if red_cards_home is not None:
+            match_data['red_cards_home'] = red_cards_home
+        if red_cards_away is not None:
+            match_data['red_cards_away'] = red_cards_away
+
+        return match_data

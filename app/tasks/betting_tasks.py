@@ -55,8 +55,8 @@ class BettingTasks:
             # First, scrape and save live matches
             live_matches_data = await self.scraper.scrape_live_matches()
             if live_matches_data:
-                # Save all live matches using batch method
-                self.storage.save_live_matches_batch(live_matches_data)
+                for match in live_matches_data:
+                    self.storage.save_match(match)
                 logger.info(f'Saved {len(live_matches_data)} live matches')
 
             # Analyze live matches for betting opportunities
@@ -115,13 +115,14 @@ class BettingTasks:
 
                 # Save matches
                 if matches:
-                    self.storage.save_matches(matches, league_name, country)
+                    for match in matches:
+                        self.storage.save_match(match)
                     logger.info(f'Saved {len(matches)} matches for {country} - {league_name}')
 
                 # Save fixtures
                 if fixtures:
                     for fixture in fixtures:
-                        self.storage.save_fixture(fixture, league_name, country)
+                        self.storage.save_match(fixture)
                     logger.info(f'Saved {len(fixtures)} fixtures for {country} - {league_name}')
 
             # Update betting outcomes for finished matches
@@ -143,8 +144,8 @@ class BettingTasks:
             live_matches = await self.scraper.scrape_live_matches()
 
             if live_matches:
-                # Save all live matches using batch method
-                self.storage.save_live_matches_batch(live_matches)
+                for match in live_matches:
+                    self.storage.save_match(match)
                 logger.info(f'Saved {len(live_matches)} live matches')
                 return f'Updated {len(live_matches)} live matches'
             else:
