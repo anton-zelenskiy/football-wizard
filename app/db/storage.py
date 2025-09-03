@@ -3,6 +3,7 @@ from typing import Any
 
 import structlog
 
+from app.api.livesport_scraper import CommonMatchData
 from .models import BettingOpportunity, League, Match, Team, db
 
 logger = structlog.get_logger()
@@ -66,25 +67,25 @@ class FootballDataStorage:
             f'Updated match status: {match.home_team.name} vs {match.away_team.name} {old_status} -> {new_status}'
         )
 
-    def save_match(self, match_data: dict[str, Any]) -> None:
+    def save_match(self, match_data: 'CommonMatchData') -> None:
         """Unified method to save any type of match (live, finished, scheduled)"""
         with self.db.atomic():
             # Find or create league
             league, _ = League.get_or_create(
-                name=match_data.get('league', ''),
-                defaults={'country': match_data.get('country', '')},
+                name=match_data.league,
+                defaults={'country': match_data.country},
             )
 
             # Find or create teams
-            home_team, _ = Team.get_or_create(name=match_data.get('home_team', ''), league=league)
-            away_team, _ = Team.get_or_create(name=match_data.get('away_team', ''), league=league)
+            home_team, _ = Team.get_or_create(name=match_data.home_team, league=league)
+            away_team, _ = Team.get_or_create(name=match_data.away_team, league=league)
 
             # Determine season based on status or use default
-            season = match_data.get('season', 2024)
-            if match_data.get('status') == 'scheduled':
+            season = 2024
+            if match_data.status == 'scheduled':
                 season = 2025  # Future fixtures
 
-            round_number = match_data.get('round_number')
+            round_number = match_data.round_number
 
             # Check if match already exists using unique constraint
             try:
@@ -99,12 +100,12 @@ class FootballDataStorage:
                 # Update existing match
                 self.update_match_status(
                     existing_match,
-                    match_data.get('status', 'scheduled'),
-                    home_score=match_data.get('home_score'),
-                    away_score=match_data.get('away_score'),
-                    minute=match_data.get('minute'),
-                    red_cards_home=match_data.get('red_cards_home', 0),
-                    red_cards_away=match_data.get('red_cards_away', 0),
+                    match_data.status,
+                    home_score=match_data.home_score,
+                    away_score=match_data.away_score,
+                    minute=match_data.minute,
+                    red_cards_home=match_data.red_cards_home,
+                    red_cards_away=match_data.red_cards_away,
                 )
 
             except Match.DoesNotExist:
@@ -113,18 +114,18 @@ class FootballDataStorage:
                     league=league,
                     home_team=home_team,
                     away_team=away_team,
-                    home_score=match_data.get('home_score'),
-                    away_score=match_data.get('away_score'),
-                    match_date=match_data.get('match_date', datetime.now()),
+                    home_score=match_data.home_score,
+                    away_score=match_data.away_score,
+                    match_date=match_data.match_date or datetime.now(),
                     season=season,
                     round=round_number,
-                    status=match_data.get('status', 'scheduled'),
-                    minute=match_data.get('minute'),
-                    red_cards_home=match_data.get('red_cards_home', 0),
-                    red_cards_away=match_data.get('red_cards_away', 0),
+                    status=match_data.status,
+                    minute=match_data.minute,
+                    red_cards_home=match_data.red_cards_home,
+                    red_cards_away=match_data.red_cards_away,
                 )
                 logger.info(
-                    f'Created new match: {home_team.name} vs {away_team.name} ({match_data.get("status")})'
+                    f'Created new match: {home_team.name} vs {away_team.name} ({match_data.status})'
                 )
 
     def save_team_standings(
@@ -161,18 +162,6 @@ class FootballDataStorage:
                 logger.info(f'Created new team: {team.name}')
             else:
                 logger.debug(f'Updated team statistics: {team.name}')
-
-    def save_fixture(self, fixture_data: dict[str, Any], league_name: str, country: str) -> None:
-        """Save a single fixture - now uses the unified save_match method"""
-        # Set league and country if not already set
-        if not fixture_data.get('league'):
-            fixture_data['league'] = league_name
-        if not fixture_data.get('country'):
-            fixture_data['country'] = country
-
-        # Ensure status is set to scheduled
-        fixture_data['status'] = 'scheduled'
-        self.save_match(fixture_data)
 
     def get_recent_live_matches(self, minutes: int = 5) -> list[Match]:
         """Get live matches from the last N minutes"""

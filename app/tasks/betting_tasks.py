@@ -1,6 +1,6 @@
 import structlog
 
-from app.api.livesport_scraper import LivesportScraper
+from app.api.livesport_scraper import LivesportScraper, CommonMatchData
 from app.betting_rules import BettingRulesEngine
 from app.db.storage import FootballDataStorage
 from app.telegram.bot import get_bot
@@ -53,7 +53,7 @@ class BettingTasks:
             logger.info('Starting live matches analysis')
 
             # First, scrape and save live matches
-            live_matches_data = await self.scraper.scrape_live_matches()
+            live_matches_data: list[CommonMatchData] = await self.scraper.scrape_live_matches()
             if live_matches_data:
                 for match in live_matches_data:
                     self.storage.save_match(match)
@@ -95,8 +95,8 @@ class BettingTasks:
                 league_name = league_data['league']
                 country = league_data['country']
                 standings = league_data['standings']
-                matches = league_data['matches']
-                fixtures = league_data.get('fixtures', [])
+                matches: list[CommonMatchData] = league_data['matches']
+                fixtures: list[CommonMatchData] = league_data.get('fixtures', [])
 
                 logger.info(f'Processing {country}: {league_name}')
 
@@ -141,7 +141,7 @@ class BettingTasks:
 
         try:
             # Scrape live matches from all sources
-            live_matches = await self.scraper.scrape_live_matches()
+            live_matches: list[CommonMatchData] = await self.scraper.scrape_live_matches()
 
             if live_matches:
                 for match in live_matches:

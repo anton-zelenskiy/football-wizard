@@ -3,11 +3,28 @@ from datetime import datetime
 from typing import Any
 
 import structlog
+from pydantic import BaseModel, Field
 from playwright.async_api import Browser, Page, TimeoutError, async_playwright
 
 from app.api.constants import LEAGUES_OF_INTEREST
 
 logger = structlog.get_logger()
+
+
+class CommonMatchData(BaseModel):
+    """Common match data structure for all match types"""
+    home_team: str
+    away_team: str
+    league: str
+    country: str
+    home_score: int | None = None
+    away_score: int | None = None
+    status: str = Field(default='scheduled', pattern='^(live|finished|scheduled)$')
+    round_number: int | None = None
+    match_date: datetime | None = None
+    minute: int | None = None
+    red_cards_home: int = 0
+    red_cards_away: int = 0
 
 
 class LivesportScraper:
@@ -78,7 +95,7 @@ class LivesportScraper:
             logger.error(f'Unexpected error while navigating to {url}: {e}')
             return False
 
-    async def scrape_live_matches(self) -> list[dict[str, Any]]:
+    async def scrape_live_matches(self) -> list[CommonMatchData]:
         """Scrape live matches from livesport.com using iterative approach"""
         url = 'https://www.livesport.com/soccer/'
 
@@ -364,7 +381,7 @@ class LivesportScraper:
             finally:
                 await browser.close()
 
-    async def scrape_league_matches(self, country: str, league_name: str) -> list[dict[str, Any]]:
+    async def scrape_league_matches(self, country: str, league_name: str) -> list[CommonMatchData]:
         """Scrape league matches from livesport.com"""
         country_lower = country.lower().replace(' ', '-')
         league_lower = league_name.lower().replace(' ', '-')
@@ -640,7 +657,7 @@ class LivesportScraper:
             logger.error(f'Error parsing date "{date_text}": {e}')
             return None
 
-    async def scrape_league_fixtures(self, country: str, league_name: str) -> list[dict[str, Any]]:
+    async def scrape_league_fixtures(self, country: str, league_name: str) -> list[CommonMatchData]:
         """Scrape scheduled fixtures for a specific league"""
         logger.info(f'Scraping fixtures for {country}: {league_name}')
 
@@ -680,7 +697,7 @@ class LivesportScraper:
             logger.error(f'Error scraping fixtures for {country}: {league_name}: {e}')
             return []
 
-    async def _extract_fixtures(self, page, country: str, league_name: str) -> list[dict[str, Any]]:
+    async def _extract_fixtures(self, page, country: str, league_name: str) -> list[CommonMatchData]:
         """Extract fixture data from the page - find first scheduled round and scrape all its matches"""
         try:
             # Find all round elements with class "event__round--static"
@@ -789,7 +806,7 @@ class LivesportScraper:
 
     async def _extract_single_fixture(
         self, element, country: str, league_name: str, round_number: int = None
-    ) -> dict[str, Any] | None:
+    ) -> CommonMatchData | None:
         """Extract a single fixture from a match element"""
         try:
             # Extract date and time from the event__time element
@@ -950,8 +967,8 @@ class LivesportScraper:
                 try:
                     logger.info(f'Scraping {country}: {league}')
                     standings = await self.scrape_league_standings(country, league)
-                    matches = await self.scrape_league_matches(country, league)
-                    fixtures = await self.scrape_league_fixtures(country, league)
+                    matches: list[CommonMatchData] = await self.scrape_league_matches(country, league)
+                    fixtures: list[CommonMatchData] = await self.scrape_league_fixtures(country, league)
 
                     league_data = {
                         'league': league,
@@ -982,27 +999,19 @@ class LivesportScraper:
         red_cards_home: int = 0,
         red_cards_away: int = 0,
         round_number: int = None,
-    ) -> dict[str, Any]:
+    ) -> CommonMatchData:
         """Create a common match data structure for all match types"""
-        match_data = {
-            'home_team': home_team,
-            'away_team': away_team,
-            'league': league,
-            'country': country,
-            'home_score': home_score,
-            'away_score': away_score,
-            'status': status,
-            'round_number': round_number,
-        }
-
-        # Add optional fields if provided
-        if match_date:
-            match_data['match_date'] = match_date
-        if minute is not None:
-            match_data['minute'] = minute
-        if red_cards_home is not None:
-            match_data['red_cards_home'] = red_cards_home
-        if red_cards_away is not None:
-            match_data['red_cards_away'] = red_cards_away
-
-        return match_data
+        return CommonMatchData(
+            home_team=home_team,
+            away_team=away_team,
+            league=league,
+            country=country,
+            home_score=home_score,
+            away_score=away_score,
+            status=status,
+            round_number=round_number,
+            match_date=match_date,
+            minute=minute,
+            red_cards_home=red_cards_home,
+            red_cards_away=red_cards_away,
+        )
