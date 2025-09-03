@@ -3,12 +3,13 @@
 Unit tests for BettingRulesEngine class
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
-from app.betting_rules import BettingRulesEngine, BettingOpportunity
-from app.db.models import League, Team, Match
+import pytest
+
+from app.betting_rules import BettingOpportunity, BettingRulesEngine
+from app.db.models import League, Match, Team
 
 
 @pytest.fixture
@@ -549,28 +550,33 @@ class TestBettingRulesEngine:
             confidence=0.75,
             details={'test': 'data'},
         )
-        
+
         with patch('app.betting_rules.DBBettingOpportunity') as mock_db_opportunity:
             mock_instance = Mock()
             mock_db_opportunity.return_value = mock_instance
-            
+
             result = betting_engine.save_opportunity(opportunity)
-            
+
             assert result == mock_instance
             mock_instance.save.assert_called_once()
 
-    @pytest.mark.parametrize('rank,expected_is_top', [
-        (1, True),   # Rank 1 should be top team
-        (3, True),   # Rank 3 (Ajax) should be top team
-        (8, True),   # Rank 8 should be top team (boundary)
-        (9, False),  # Rank 9 (FC Volendam) should NOT be top team
-        (10, False), # Rank 10 should NOT be top team
-        (15, False), # Rank 15 should NOT be top team
-    ])
+    @pytest.mark.parametrize(
+        'rank,expected_is_top',
+        [
+            (1, True),  # Rank 1 should be top team
+            (3, True),  # Rank 3 (Ajax) should be top team
+            (8, True),  # Rank 8 should be top team (boundary)
+            (9, False),  # Rank 9 (FC Volendam) should NOT be top team
+            (10, False),  # Rank 10 should NOT be top team
+            (15, False),  # Rank 15 should NOT be top team
+        ],
+    )
     def test_top_team_classification(self, betting_engine, rank, expected_is_top):
         """Test that team rank classification works correctly with top_teams_count=8"""
         is_top_team = rank <= betting_engine.top_teams_count
-        assert is_top_team == expected_is_top, f"Rank {rank} should {'be' if expected_is_top else 'NOT be'} a top team"
+        assert is_top_team == expected_is_top, (
+            f'Rank {rank} should {"be" if expected_is_top else "NOT be"} a top team'
+        )
 
 
 if __name__ == '__main__':
