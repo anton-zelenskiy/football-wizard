@@ -435,7 +435,6 @@ For support and questions:
 
 ## Acknowledgments
 
-- [TheSportsDB](https://www.thesportsdb.com/) for providing free sports data
 - [Livesport.com](https://www.livesport.com/) for live match data
 - [Nginx](https://nginx.org/) for reverse proxy and SSL
 - [FastAPI](https://fastapi.tiangolo.com/) for the web framework
