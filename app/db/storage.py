@@ -3,7 +3,7 @@ from typing import Any
 
 import structlog
 
-from app.api.livesport_scraper import CommonMatchData
+from app.scraper.livesport_scraper import CommonMatchData
 
 from .models import BettingOpportunity, League, Match, Team, db
 

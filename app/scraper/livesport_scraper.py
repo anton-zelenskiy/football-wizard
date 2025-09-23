@@ -3,16 +3,17 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, Field
 from playwright.async_api import Browser, Page, TimeoutError, async_playwright
+from pydantic import BaseModel, Field
 
-from app.api.constants import LEAGUES_OF_INTEREST
+from .constants import LEAGUES_OF_INTEREST
 
 logger = structlog.get_logger()
 
 
 class CommonMatchData(BaseModel):
     """Common match data structure for all match types"""
+
     home_team: str
     away_team: str
     league: str
@@ -697,7 +698,9 @@ class LivesportScraper:
             logger.error(f'Error scraping fixtures for {country}: {league_name}: {e}')
             return []
 
-    async def _extract_fixtures(self, page, country: str, league_name: str) -> list[CommonMatchData]:
+    async def _extract_fixtures(
+        self, page, country: str, league_name: str
+    ) -> list[CommonMatchData]:
         """Extract fixture data from the page - find first scheduled round and scrape all its matches"""
         try:
             # Find all round elements with class "event__round--static"
@@ -760,7 +763,9 @@ class LivesportScraper:
 
                 # If we're collecting matches and this looks like a match element
                 if collecting_matches and await self._is_match_element(element):
-                    fixture = await self._extract_single_fixture(element, country, league_name, round_number)
+                    fixture = await self._extract_single_fixture(
+                        element, country, league_name, round_number
+                    )
                     if fixture:
                         fixtures.append(fixture)
                         logger.info(
@@ -967,8 +972,12 @@ class LivesportScraper:
                 try:
                     logger.info(f'Scraping {country}: {league}')
                     standings = await self.scrape_league_standings(country, league)
-                    matches: list[CommonMatchData] = await self.scrape_league_matches(country, league)
-                    fixtures: list[CommonMatchData] = await self.scrape_league_fixtures(country, league)
+                    matches: list[CommonMatchData] = await self.scrape_league_matches(
+                        country, league
+                    )
+                    fixtures: list[CommonMatchData] = await self.scrape_league_fixtures(
+                        country, league
+                    )
 
                     league_data = {
                         'league': league,

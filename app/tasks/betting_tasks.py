@@ -1,8 +1,8 @@
 import structlog
 
-from app.api.livesport_scraper import LivesportScraper, CommonMatchData
 from app.betting_rules import BettingRulesEngine
 from app.db.storage import FootballDataStorage
+from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
 from app.telegram.bot import get_bot
 
 logger = structlog.get_logger()
