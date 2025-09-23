@@ -11,7 +11,7 @@ logger = structlog.get_logger()
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.app_name,
-    description="Football Betting Analysis API",
+    description="Football Wizard",
     version="1.0.0"
 )
 
@@ -32,7 +32,7 @@ app.include_router(api_router)
 async def root():
     """Root endpoint"""
     return {
-        "message": "Football Betting Analysis API",
+        "message": "Football Wizard",
         "version": "1.0.0",
         "status": "running"
     }
@@ -42,11 +42,3 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
-
-
-
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 

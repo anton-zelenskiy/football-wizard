@@ -31,7 +31,7 @@ class BettingTasks:
                     saved_opportunities.append(opp)
 
                 # Send notifications to users
-                await self.bot.send_daily_summary(saved_opportunities)
+                # await self.bot.send_daily_summary(saved_opportunities)
 
                 logger.info(
                     f'Daily scheduled analysis completed: {len(opportunities)} opportunities found'

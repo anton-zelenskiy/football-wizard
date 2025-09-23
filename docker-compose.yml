@@ -1,5 +1,5 @@
 services:
-  web:
+  football_wizard:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
@@ -12,6 +12,7 @@ services:
       - redis
     networks:
       - football-network
+      - nginx-bot_reverse_proxy
     ports:
       - "8000:8000"
 
@@ -43,26 +44,11 @@ services:
       timeout: 3s
       retries: 5
 
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./infra-nginx/data/nginx.conf:/etc/nginx/nginx.conf
-      - ./infra-nginx/data/conf:/etc/nginx/conf.d
-      - ./infra-nginx/cert.pem:/etc/cert.pem
-      - ./infra-nginx/private.key:/etc/private.key
-    depends_on:
-      - web
-    networks:
-      - football-network
-    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
-
-
 volumes:
   redis_data:
 
 networks:
   football-network:
     driver: bridge
+  nginx-bot_reverse_proxy:
+    external: true

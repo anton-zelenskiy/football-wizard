@@ -120,26 +120,652 @@ class TestBettingRulesEngine:
         home_team, _ = mock_teams
 
         with patch.object(betting_engine, '_get_recent_matches') as mock_get_matches:
-            # Mock recent matches
+            # Mock recent matches with varied outcomes
             mock_matches = []
-            for i in range(5):
+            for i in range(10):
                 match = Mock(spec=Match)
                 match.home_team = home_team
                 match.away_team = Mock(spec=Team)
-                match.home_score = 0
-                match.away_score = 1
+
+                # Create a pattern: first 3 wins, then 2 losses, then 2 draws, then 3 wins
+                if i < 3:
+                    match.home_score = 2
+                    match.away_score = 0
+                elif i < 5:
+                    match.home_score = 0
+                    match.away_score = 1
+                elif i < 7:
+                    match.home_score = 1
+                    match.away_score = 1
+                else:
+                    match.home_score = 2
+                    match.away_score = 1
+
                 mock_matches.append(match)
 
             mock_get_matches.return_value = mock_matches
 
             analysis = betting_engine._analyze_team_performance(home_team, 'home')
 
+            # Test basic fields
+            assert 'consecutive_wins' in analysis
             assert 'consecutive_losses' in analysis
             assert 'consecutive_draws' in analysis
             assert 'consecutive_no_goals' in analysis
+            assert 'consecutive_goals' in analysis
             assert 'is_top_team' in analysis
             assert 'is_top5_team' in analysis
+            assert 'total_matches' in analysis
+            assert 'wins' in analysis
+            assert 'draws' in analysis
+            assert 'losses' in analysis
+            assert 'win_rate' in analysis
+            assert 'draw_rate' in analysis
+            assert 'loss_rate' in analysis
             assert analysis['team'] == home_team
+
+            # Test calculated values
+            assert analysis['total_matches'] == 10
+            assert analysis['wins'] == 6  # 3 + 3
+            assert analysis['draws'] == 2
+            assert analysis['losses'] == 2
+            assert analysis['win_rate'] == 0.6
+            assert analysis['draw_rate'] == 0.2
+            assert analysis['loss_rate'] == 0.2
+
+    def test_calculate_consecutive_streak(self, betting_engine, mock_teams):
+        """Test consecutive streak calculation"""
+        home_team, _ = mock_teams
+
+        # Test 1: Simple consecutive wins pattern
+        # Most recent first: [win, win, win, loss, loss]
+        win_pattern = [
+            (2, 0),
+            (3, 1),
+            (1, 0),  # 3 wins (most recent first)
+            (0, 1),
+            (0, 2),  # 2 losses
+        ]
+
+        win_matches = []
+        for home_score, away_score in win_pattern:
+            match = Mock(spec=Match)
+            match.home_team = home_team
+            match.away_team = Mock(spec=Team)
+            match.home_score = home_score
+            match.away_score = away_score
+            win_matches.append(match)
+
+        # Consecutive wins should be 3 from the beginning (most recent)
+        consecutive_wins = betting_engine._calculate_consecutive_streak(
+            win_matches, home_team, 'win'
+        )
+        assert consecutive_wins == 3
+
+        # Test 2: Consecutive no-goals pattern
+        # Most recent first: [no-goals, no-goals, goals, goals]
+        no_goals_pattern = [
+            (0, 1),
+            (0, 2),  # 2 no-goals (most recent first)
+            (1, 0),
+            (2, 1),  # 2 with goals
+        ]
+
+        no_goals_matches = []
+        for home_score, away_score in no_goals_pattern:
+            match = Mock(spec=Match)
+            match.home_team = home_team
+            match.away_team = Mock(spec=Team)
+            match.home_score = home_score
+            match.away_score = away_score
+            no_goals_matches.append(match)
+
+        # Consecutive no-goals should be 2 from the beginning (most recent)
+        consecutive_no_goals = betting_engine._calculate_consecutive_streak(
+            no_goals_matches, home_team, 'no_goals'
+        )
+        assert consecutive_no_goals == 2
+
+        # Test 3: Mixed pattern
+        # Most recent first: [no-goals, no-goals, goals, win, loss]
+        mixed_pattern = [
+            (0, 1),
+            (0, 2),  # 2 no-goals (most recent first)
+            (1, 0),  # 1 with goals
+            (2, 0),
+            (0, 1),  # 1 win, 1 loss
+        ]
+
+        mixed_matches = []
+        for home_score, away_score in mixed_pattern:
+            match = Mock(spec=Match)
+            match.home_team = home_team
+            match.away_team = Mock(spec=Team)
+            match.home_score = home_score
+            match.away_score = away_score
+            mixed_matches.append(match)
+
+        # Consecutive draws should be 0 since most recent match is not a draw
+        consecutive_draws = betting_engine._calculate_consecutive_streak(
+            mixed_matches, home_team, 'draw'
+        )
+        assert consecutive_draws == 0
+
+        # Consecutive no-goals should be 2 from the beginning (most recent)
+        # Pattern: [no-goals(0,1), no-goals(0,2), goals(1,0), win(2,0), loss(0,1)]
+        # So from the beginning: no-goals, no-goals = 2 no-goals
+        consecutive_no_goals = betting_engine._calculate_consecutive_streak(
+            mixed_matches, home_team, 'no_goals'
+        )
+        assert consecutive_no_goals == 2
+
+        # Consecutive wins should be 0 since most recent match is not a win
+        consecutive_wins = betting_engine._calculate_consecutive_streak(
+            mixed_matches, home_team, 'win'
+        )
+        assert consecutive_wins == 0
+
+        # Consecutive losses should be 2 since most recent matches are losses
+        consecutive_losses = betting_engine._calculate_consecutive_streak(
+            mixed_matches, home_team, 'loss'
+        )
+        assert consecutive_losses == 2
+
+    def test_rule_winning_streak_vs_losing_streak(self, betting_engine, mock_match):
+        """Test winning streak vs losing streak rule"""
+        # Mock team analysis - home team on winning streak, away team on losing streak
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 4,  # Home team on winning streak
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 4,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 0,
+            'consecutive_losses': 3,  # Away team on losing streak
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 2,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_winning_streak_vs_losing_streak(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Winning Streak vs Losing Streak'
+        assert opportunity.confidence > 0.65
+        assert opportunity.details['winning_team'] == mock_match.home_team.name
+        assert opportunity.details['losing_team'] == mock_match.away_team.name
+        assert opportunity.details['winning_streak'] == 4
+        assert opportunity.details['losing_streak'] == 3
+        assert opportunity.details['expected_outcome'] == f'{mock_match.home_team.name} to win'
+
+    def test_rule_winning_streak_vs_losing_streak_away_team(self, betting_engine, mock_match):
+        """Test winning streak vs losing streak rule with away team winning"""
+        # Mock team analysis - away team on winning streak, home team on losing streak
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 0,
+            'consecutive_losses': 3,  # Home team on losing streak
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 2,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 5,  # Away team on winning streak
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 5,
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_winning_streak_vs_losing_streak(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Winning Streak vs Losing Streak'
+        assert opportunity.confidence > 0.65
+        assert opportunity.details['winning_team'] == mock_match.away_team.name
+        assert opportunity.details['losing_team'] == mock_match.home_team.name
+        assert opportunity.details['winning_streak'] == 5
+        assert opportunity.details['losing_streak'] == 3
+        assert opportunity.details['expected_outcome'] == f'{mock_match.away_team.name} to win'
+
+    def test_rule_winning_streak_vs_losing_streak_insufficient_streaks(
+        self, betting_engine, mock_match
+    ):
+        """Test winning streak vs losing streak rule with insufficient streaks"""
+        # Mock team analysis - insufficient streaks
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 2,  # Only 2 wins (need 3+)
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 2,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 0,
+            'consecutive_losses': 1,  # Only 1 loss (need 2+)
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 1,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_winning_streak_vs_losing_streak(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is None
+
+    def test_rule_high_scoring_vs_low_scoring(self, betting_engine, mock_match):
+        """Test high scoring vs low scoring rule"""
+        # Mock team analysis - home team scoring consistently, away team not scoring
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 2,
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 4,  # Home team scoring consistently
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 0,
+            'consecutive_losses': 2,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 3,  # Away team not scoring
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_high_scoring_vs_low_scoring(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'High Scoring vs Low Scoring'
+        assert opportunity.confidence == 0.75
+        assert opportunity.details['high_scoring_team'] == mock_match.home_team.name
+        assert opportunity.details['low_scoring_team'] == mock_match.away_team.name
+        assert opportunity.details['home_goals_streak'] == 4
+        assert opportunity.details['away_no_goals_streak'] == 3
+        assert (
+            opportunity.details['expected_outcome']
+            == f'{mock_match.home_team.name} to win with goals'
+        )
+
+    def test_rule_both_teams_good_form(self, betting_engine, mock_match):
+        """Test both teams good form rule"""
+        # Mock team analysis - both teams in good form and scoring
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 3,  # Good form
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 4,  # Scoring consistently
+            'win_rate': 0.7,  # Good win rate
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 2,  # Good form
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 3,  # Scoring consistently
+            'win_rate': 0.65,  # Good win rate
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_both_teams_good_form(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Both Teams Good Form'
+        assert opportunity.confidence == 0.70
+        assert opportunity.details['home_team'] == mock_match.home_team.name
+        assert opportunity.details['away_team'] == mock_match.away_team.name
+        assert opportunity.details['home_win_rate'] == 0.7
+        assert opportunity.details['away_win_rate'] == 0.65
+        assert opportunity.details['home_goals_streak'] == 4
+        assert opportunity.details['away_goals_streak'] == 3
+        assert opportunity.details['expected_outcome'] == 'high-scoring match (over 2.5 goals)'
+
+    def test_rule_both_teams_good_form_insufficient_conditions(self, betting_engine, mock_match):
+        """Test both teams good form rule with insufficient conditions"""
+        # Mock team analysis - one team not in good form
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_wins': 1,  # Not enough wins
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 2,
+            'win_rate': 0.4,  # Not good enough
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_wins': 2,  # Good form
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_goals': 3,  # Scoring consistently
+            'win_rate': 0.65,  # Good win rate
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_both_teams_good_form(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is None
+
+    def test_enhanced_rule_strong_vs_weak_poor_form(self, betting_engine, mock_match):
+        """Test enhanced strong vs weak poor form rule with multiple factors"""
+        # Mock team analysis with multiple poor form indicators
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_losses': 4,  # Very poor form
+            'consecutive_no_goals': 3,  # Not scoring
+            'win_rate': 0.2,  # Very low win rate
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_losses': 0,
+            'consecutive_no_goals': 0,
+            'win_rate': 0.8,  # Good win rate
+            'consecutive_wins': 4,  # Good form
+            'consecutive_draws': 0,
+            'consecutive_goals': 4,
+            'is_top_team': True,
+        }
+
+        # Mock strength difference (away team much stronger)
+        with patch.object(betting_engine, '_calculate_team_strength_difference', return_value=-12):
+            opportunity = betting_engine._rule_strong_vs_weak_poor_form(
+                mock_match, home_analysis, away_analysis, -12
+            )
+
+            assert opportunity is not None
+            assert opportunity.rule_name == 'Strong vs Weak Poor Form'
+            assert opportunity.confidence >= 0.85  # Should be boosted by multiple factors
+            assert opportunity.details['strong_team'] == mock_match.away_team.name
+            assert opportunity.details['weak_team'] == mock_match.home_team.name
+            assert opportunity.details['strength_difference'] == -12
+            assert opportunity.details['strong_team_win_rate'] == 0.8
+            assert opportunity.details['strong_team_consecutive_wins'] == 4
+            assert opportunity.details['weak_team_consecutive_losses'] == 4
+            assert opportunity.details['weak_team_consecutive_no_goals'] == 3
+            assert opportunity.details['weak_team_win_rate'] == 0.2
+
+    def test_enhanced_rule_both_teams_poor_form(self, betting_engine, mock_match):
+        """Test enhanced both teams poor form rule with confidence calculation"""
+        # Mock team analysis with multiple poor form indicators
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_losses': 4,  # Very poor
+            'consecutive_no_goals': 3,  # Not scoring
+            'win_rate': 0.15,  # Very low
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_losses': 3,  # Poor
+            'consecutive_no_goals': 2,  # Not scoring
+            'win_rate': 0.25,  # Low
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+
+        opportunity = betting_engine._rule_both_teams_poor_form(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Both Teams Poor Form'
+        # Confidence should be higher due to multiple poor indicators
+        assert opportunity.confidence > 0.70
+        assert opportunity.details['expected_outcome'] == 'draw'
+        assert opportunity.details['home_consecutive_losses'] == 4
+        assert opportunity.details['home_consecutive_no_goals'] == 3
+        assert opportunity.details['home_win_rate'] == 0.15
+        assert opportunity.details['away_consecutive_losses'] == 3
+        assert opportunity.details['away_consecutive_no_goals'] == 2
+        assert opportunity.details['away_win_rate'] == 0.25
+
+    def test_enhanced_rule_top_team_losing_vs_strong(self, betting_engine, mock_match):
+        """Test enhanced top team losing vs strong rule with confidence boosts"""
+        # Mock team analysis with multiple factors
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_losses': 5,  # Long losing streak
+            'consecutive_no_goals': 3,  # Not scoring
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': True,
+            'is_top5_team': True,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_losses': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_wins': 3,  # Good form
+            'consecutive_draws': 0,
+            'consecutive_goals': 3,
+            'is_top_team': False,
+            'is_top5_team': False,
+        }
+
+        # Set up opponent rank to be within 5 ranks (strong opponent)
+        mock_match.home_team.rank = 3
+        mock_match.away_team.rank = 6  # Within 5 ranks (3 + 5 = 8, 6 <= 8)
+
+        opportunity = betting_engine._rule_top_team_losing_vs_strong(
+            mock_match, home_analysis, away_analysis, 3
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Top Team Losing vs Strong'
+        # Confidence should be boosted by multiple factors
+        assert opportunity.confidence >= 0.80
+        assert opportunity.details['top_team'] == mock_match.home_team.name
+        assert opportunity.details['opponent'] == mock_match.away_team.name
+        assert opportunity.details['consecutive_losses'] == 5
+        assert opportunity.details['consecutive_no_goals'] == 3
+        assert opportunity.details['opponent_consecutive_wins'] == 3
+
+    def test_enhanced_rule_top_team_drawing_streak(self, betting_engine, mock_match):
+        """Test enhanced top team drawing streak rule with confidence boosts"""
+        # Mock team analysis with multiple factors
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_draws': 5,  # Long drawing streak
+            'consecutive_no_goals': 2,  # Not scoring
+            'consecutive_wins': 0,
+            'consecutive_losses': 0,
+            'consecutive_goals': 0,
+            'is_top_team': True,
+            'is_top5_team': True,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_wins': 0,
+            'consecutive_losses': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+            'is_top5_team': False,
+        }
+
+        opportunity = betting_engine._rule_top_team_drawing_streak(
+            mock_match, home_analysis, away_analysis
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Top Team Drawing Streak'
+        # Confidence should be boosted by multiple factors
+        assert opportunity.confidence >= 0.75
+        assert opportunity.details['top_team'] == mock_match.home_team.name
+        assert opportunity.details['consecutive_draws'] == 5
+        assert opportunity.details['consecutive_no_goals'] == 2
+        assert opportunity.details['expected_outcome'] == 'draw'
+
+    def test_enhanced_rule_top_team_no_goals_vs_strong(self, betting_engine, mock_match):
+        """Test enhanced top team no goals vs strong rule with confidence boosts"""
+        # Mock team analysis with multiple factors
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_no_goals': 5,  # Long no-goals streak
+            'consecutive_losses': 3,  # Also losing
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': True,
+            'is_top5_team': True,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_no_goals': 0,
+            'consecutive_losses': 0,
+            'consecutive_wins': 4,  # Good form
+            'consecutive_draws': 0,
+            'consecutive_goals': 4,
+            'is_top_team': False,
+            'is_top5_team': False,
+        }
+
+        # Set up opponent rank to be within 8 ranks (strong opponent)
+        mock_match.home_team.rank = 2
+        mock_match.away_team.rank = 8  # Within 8 ranks (2 + 8 = 10, 8 <= 10)
+
+        opportunity = betting_engine._rule_top_team_no_goals_vs_strong(
+            mock_match, home_analysis, away_analysis, 6
+        )
+
+        assert opportunity is not None
+        assert opportunity.rule_name == 'Top Team No Goals vs Strong'
+        # Confidence should be boosted by multiple factors
+        assert opportunity.confidence >= 0.80
+        assert opportunity.details['top_team'] == mock_match.home_team.name
+        assert opportunity.details['opponent'] == mock_match.away_team.name
+        assert opportunity.details['consecutive_no_goals'] == 5
+        assert opportunity.details['consecutive_losses'] == 3
+        assert opportunity.details['opponent_consecutive_wins'] == 4
+
+    def test_rule_confidence_calculation_edge_cases(self, betting_engine, mock_match):
+        """Test confidence calculation edge cases"""
+        # Test maximum confidence cap
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_losses': 6,  # Very long losing streak
+            'consecutive_no_goals': 5,  # Very long no-goals streak
+            'win_rate': 0.1,  # Very low win rate
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_losses': 0,
+            'consecutive_no_goals': 0,
+            'win_rate': 0.9,  # Very high win rate
+            'consecutive_wins': 6,  # Very long winning streak
+            'consecutive_draws': 0,
+            'consecutive_goals': 6,
+            'is_top_team': True,
+        }
+
+        # Mock very large strength difference
+        with patch.object(betting_engine, '_calculate_team_strength_difference', return_value=-15):
+            opportunity = betting_engine._rule_strong_vs_weak_poor_form(
+                mock_match, home_analysis, away_analysis, -15
+            )
+
+            assert opportunity is not None
+            # Confidence should be capped at 0.90
+            assert opportunity.confidence == 0.90
+
+    def test_analyze_team_performance_with_no_matches(self, betting_engine, mock_teams):
+        """Test team performance analysis when no recent matches exist"""
+        home_team, _ = mock_teams
+
+        with patch.object(betting_engine, '_get_recent_matches') as mock_get_matches:
+            mock_get_matches.return_value = []
+
+            analysis = betting_engine._analyze_team_performance(home_team, 'home')
+
+            # Should return default values when no matches exist
+            assert analysis['consecutive_wins'] == 0
+            assert analysis['consecutive_losses'] == 0
+            assert analysis['consecutive_draws'] == 0
+            assert analysis['consecutive_no_goals'] == 0
+            assert analysis['consecutive_goals'] == 0
+            assert analysis['total_matches'] == 0
+            assert analysis['wins'] == 0
+            assert analysis['draws'] == 0
+            assert analysis['losses'] == 0
+            assert analysis['win_rate'] == 0
+            assert analysis['draw_rate'] == 0
+            assert analysis['loss_rate'] == 0
+
+    def test_analyze_team_performance_with_single_match(self, betting_engine, mock_teams):
+        """Test team performance analysis with only one recent match"""
+        home_team, _ = mock_teams
+
+        with patch.object(betting_engine, '_get_recent_matches') as mock_get_matches:
+            # Single match - home team wins
+            match = Mock(spec=Match)
+            match.home_team = home_team
+            match.away_team = Mock(spec=Team)
+            match.home_score = 2
+            match.away_score = 0
+
+            mock_get_matches.return_value = [match]
+
+            analysis = betting_engine._analyze_team_performance(home_team, 'home')
+
+            assert analysis['total_matches'] == 1
+            assert analysis['wins'] == 1
+            assert analysis['draws'] == 0
+            assert analysis['losses'] == 0
+            assert analysis['win_rate'] == 1.0
+            assert analysis['draw_rate'] == 0.0
+            assert analysis['loss_rate'] == 0.0
+            assert analysis['consecutive_wins'] == 1
+            assert analysis['consecutive_losses'] == 0
+            assert analysis['consecutive_draws'] == 0
+            assert analysis['consecutive_no_goals'] == 0
+            assert analysis['consecutive_goals'] == 1
 
     def test_rule_strong_vs_weak_poor_form(self, betting_engine, mock_match):
         """Test strong vs weak poor form rule"""
@@ -148,12 +774,20 @@ class TestBettingRulesEngine:
             'team': mock_match.home_team,
             'consecutive_losses': 3,  # Home team has poor form
             'consecutive_no_goals': 2,
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'win_rate': 0.2,
             'is_top_team': False,
         }
         away_analysis = {
             'team': mock_match.away_team,
             'consecutive_losses': 0,  # Away team is strong
             'consecutive_no_goals': 0,
+            'consecutive_wins': 3,
+            'consecutive_draws': 0,
+            'consecutive_goals': 3,
+            'win_rate': 0.8,
             'is_top_team': True,
         }
 
@@ -203,12 +837,20 @@ class TestBettingRulesEngine:
             'team': mock_match.home_team,
             'consecutive_losses': 2,
             'consecutive_no_goals': 1,
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'win_rate': 0.25,
             'is_top_team': False,
         }
         away_analysis = {
             'team': mock_match.away_team,
             'consecutive_losses': 3,
             'consecutive_no_goals': 2,
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'win_rate': 0.2,
             'is_top_team': False,
         }
 
@@ -228,6 +870,9 @@ class TestBettingRulesEngine:
             'team': mock_match.home_team,
             'consecutive_losses': 3,
             'consecutive_no_goals': 0,
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
             'is_top_team': True,
             'is_top5_team': True,
         }
@@ -235,6 +880,9 @@ class TestBettingRulesEngine:
             'team': mock_match.away_team,
             'consecutive_losses': 0,
             'consecutive_no_goals': 0,
+            'consecutive_wins': 2,
+            'consecutive_draws': 0,
+            'consecutive_goals': 2,
             'is_top_team': False,
             'is_top5_team': False,
         }
@@ -288,8 +936,24 @@ class TestBettingRulesEngine:
     def test_rule_top_team_drawing_streak(self, betting_engine, mock_match):
         """Test top team drawing streak rule"""
         # Mock team analysis
-        home_analysis = {'team': mock_match.home_team, 'consecutive_draws': 3, 'is_top_team': True}
-        away_analysis = {'team': mock_match.away_team, 'consecutive_draws': 0, 'is_top_team': False}
+        home_analysis = {
+            'team': mock_match.home_team,
+            'consecutive_draws': 3,
+            'consecutive_no_goals': 1,
+            'consecutive_wins': 0,
+            'consecutive_losses': 0,
+            'consecutive_goals': 0,
+            'is_top_team': True,
+        }
+        away_analysis = {
+            'team': mock_match.away_team,
+            'consecutive_draws': 0,
+            'consecutive_no_goals': 0,
+            'consecutive_wins': 0,
+            'consecutive_losses': 0,
+            'consecutive_goals': 0,
+            'is_top_team': False,
+        }
 
         opportunity = betting_engine._rule_top_team_drawing_streak(
             mock_match, home_analysis, away_analysis
@@ -306,11 +970,19 @@ class TestBettingRulesEngine:
         home_analysis = {
             'team': mock_match.home_team,
             'consecutive_no_goals': 3,
+            'consecutive_wins': 0,
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
             'is_top_team': True,
         }
         away_analysis = {
             'team': mock_match.away_team,
             'consecutive_no_goals': 0,
+            'consecutive_wins': 2,
+            'consecutive_losses': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 2,
             'is_top_team': False,
         }
 
@@ -521,12 +1193,20 @@ class TestBettingRulesEngine:
             'team': mock_match.home_team,
             'consecutive_losses': 3,  # Home team has poor form
             'consecutive_no_goals': 2,
+            'consecutive_wins': 0,
+            'consecutive_draws': 0,
+            'consecutive_goals': 0,
+            'win_rate': 0.2,
             'is_top_team': False,
         }
         away_analysis = {
             'team': mock_match.away_team,
             'consecutive_losses': 0,  # Away team is strong
             'consecutive_no_goals': 0,
+            'consecutive_wins': 3,
+            'consecutive_draws': 0,
+            'consecutive_goals': 3,
+            'win_rate': 0.8,
             'is_top_team': True,
         }
 

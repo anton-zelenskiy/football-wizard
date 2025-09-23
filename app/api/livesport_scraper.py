@@ -764,7 +764,7 @@ class LivesportScraper:
                     if fixture:
                         fixtures.append(fixture)
                         logger.info(
-                            f'Extracted fixture: {fixture["home_team"]} vs {fixture["away_team"]} on {fixture["match_date"]}'
+                            f'Extracted fixture: {fixture.home_team} vs {fixture.away_team} on {fixture.match_date}'
                         )
 
             logger.info(f'Total fixtures extracted for {round_text}: {len(fixtures)}')

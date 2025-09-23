@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 
 from app.api.livesport_scraper import CommonMatchData
+
 from .models import BettingOpportunity, League, Match, Team, db
 
 logger = structlog.get_logger()
@@ -73,15 +74,20 @@ class FootballDataStorage:
             # Find or create league
             league, _ = League.get_or_create(
                 name=match_data.league,
+                country=match_data.country,
                 defaults={'country': match_data.country},
             )
 
             # Find or create teams
-            home_team, _ = Team.get_or_create(name=match_data.home_team, league=league)
-            away_team, _ = Team.get_or_create(name=match_data.away_team, league=league)
+            home_team, _ = Team.get_or_create(
+                name=match_data.home_team, league=league, country=match_data.country
+            )
+            away_team, _ = Team.get_or_create(
+                name=match_data.away_team, league=league, country=match_data.country
+            )
 
             # Determine season based on status or use default
-            season = 2024
+            season = 2025
             if match_data.status == 'scheduled':
                 season = 2025  # Future fixtures
 
@@ -146,7 +152,8 @@ class FootballDataStorage:
 
             team, created = Team.get_or_create(name=team_name, league=league)
 
-            # Update team statistics
+            # Update team statistics and ensure country is set
+            team.country = country  # Always set the country
             team.rank = team_data.get('rank')
             team.games_played = team_data.get('all', {}).get('played', 0)
             team.wins = team_data.get('all', {}).get('win', 0)
