@@ -7,6 +7,8 @@ from app.db.models import BettingOpportunity, Match, Team
 from app.db.storage import FootballDataStorage
 from app.settings import settings
 
+from .team_analysis import TeamAnalysis, TeamAnalysisService
+
 logger = structlog.get_logger()
 
 
@@ -31,6 +33,12 @@ class BettingRulesEngine:
         self.min_consecutive_losses_top5 = settings.min_consecutive_losses_top5
         self.min_no_goals_matches = settings.min_no_goals_matches
         self.live_draw_minute_threshold = settings.live_draw_minute_threshold
+
+        # Initialize team analysis service
+        self.team_analysis_service = TeamAnalysisService(
+            top_teams_count=self.top_teams_count,
+            min_consecutive_losses=self.min_consecutive_losses
+        )
 
     def analyze_scheduled_matches(self) -> list[BetRule]:
         """Analyze scheduled matches for betting opportunities based on team history"""
@@ -87,9 +95,17 @@ class BettingRulesEngine:
     def _analyze_scheduled_match(self, match: Match) -> BetRule | None:
         """Analyze a scheduled match considering both teams and their relative strength"""
 
+        # Get recent matches for both teams
+        home_recent_matches = self.storage.get_team_recent_finished_matches(match.home_team, count=5)
+        away_recent_matches = self.storage.get_team_recent_finished_matches(match.away_team, count=5)
+
         # Get team analysis for both teams
-        home_analysis = self._analyze_team_performance(match.home_team, 'home')
-        away_analysis = self._analyze_team_performance(match.away_team, 'away')
+        home_analysis = self.team_analysis_service.analyze_team_performance(
+            match.home_team, 'home', home_recent_matches
+        )
+        away_analysis = self.team_analysis_service.analyze_team_performance(
+            match.away_team, 'away', away_recent_matches
+        )
 
         # Calculate team strength difference
         strength_diff = self._calculate_team_strength_difference(match.home_team, match.away_team)
@@ -100,107 +116,6 @@ class BettingRulesEngine:
         )
 
         return opportunity
-
-    def _analyze_team_performance(self, team: Team, team_type: str) -> dict[str, Any]:
-        """Analyze a team's recent performance comprehensively"""
-        analysis = {
-            'team': team,
-            'team_type': team_type,
-            'rank': team.rank,
-            'consecutive_wins': 0,
-            'consecutive_losses': 0,
-            'consecutive_draws': 0,
-            'consecutive_no_goals': 0,
-            'consecutive_goals': 0,
-            'recent_matches': [],
-            'is_top_team': False,
-            'is_top5_team': False,
-            'total_matches': 0,
-            'wins': 0,
-            'draws': 0,
-            'losses': 0,
-            'goals_scored': 0,
-            'goals_conceded': 0,
-            'win_rate': 0,
-            'draw_rate': 0,
-            'loss_rate': 0,
-        }
-
-        if not team.rank:
-            logger.warning(f'Team {team.name} has no rank, returning default analysis')
-            return analysis
-
-        analysis['is_top_team'] = team.rank <= self.top_teams_count
-        analysis['is_top5_team'] = team.rank <= 5
-
-        # Get recent matches for streak analysis
-        recent_matches = self._get_recent_matches(team, max(10, self.min_consecutive_losses * 2))
-        analysis['recent_matches'] = recent_matches
-
-        logger.info(f'Team {team.name}: Found {len(recent_matches)} recent matches')
-
-        if not recent_matches:
-            logger.warning(f'Team {team.name}: No recent matches found, returning default analysis')
-            return analysis
-
-        # Calculate consecutive streaks
-        analysis['consecutive_wins'] = self._calculate_consecutive_streak(
-            recent_matches, team, 'win'
-        )
-        analysis['consecutive_losses'] = self._calculate_consecutive_streak(
-            recent_matches, team, 'loss'
-        )
-        analysis['consecutive_draws'] = self._calculate_consecutive_streak(
-            recent_matches, team, 'draw'
-        )
-        analysis['consecutive_no_goals'] = self._calculate_consecutive_streak(
-            recent_matches, team, 'no_goals'
-        )
-        analysis['consecutive_goals'] = self._calculate_consecutive_streak(
-            recent_matches, team, 'goals'
-        )
-
-        # Calculate overall stats from recent matches
-        total_matches = len(recent_matches)
-        wins = sum(1 for match in recent_matches if self._team_won(match, team))
-        draws = sum(1 for match in recent_matches if self._team_drew(match, team))
-        losses = total_matches - wins - draws
-
-        analysis.update(
-            {
-                'total_matches': total_matches,
-                'wins': wins,
-                'draws': draws,
-                'losses': losses,
-                'win_rate': wins / total_matches if total_matches > 0 else 0,
-                'draw_rate': draws / total_matches if total_matches > 0 else 0,
-                'loss_rate': losses / total_matches if total_matches > 0 else 0,
-            }
-        )
-
-        return analysis
-
-    def _calculate_consecutive_streak(
-        self, matches: list[Match], team: Team, streak_type: str
-    ) -> int:
-        """Calculate consecutive streak for a specific type (win, loss, draw, no_goals, goals)"""
-        streak = 0
-
-        for match in matches:
-            if streak_type == 'win' and self._team_won(match, team):
-                streak += 1
-            elif streak_type == 'loss' and self._team_lost(match, team):
-                streak += 1
-            elif streak_type == 'draw' and self._team_drew(match, team):
-                streak += 1
-            elif streak_type == 'no_goals' and self._team_no_goals(match, team):
-                streak += 1
-            elif streak_type == 'goals' and not self._team_no_goals(match, team):
-                streak += 1
-            else:
-                break
-
-        return streak
 
     def _calculate_team_strength_difference(self, home_team: Team, away_team: Team) -> int:
         """Calculate the strength difference between teams based on rank"""
@@ -219,8 +134,8 @@ class BettingRulesEngine:
     def _apply_scheduled_rules(
         self,
         match: Match,
-        home_analysis: dict[str, Any],
-        away_analysis: dict[str, Any],
+        home_analysis: TeamAnalysis,
+        away_analysis: TeamAnalysis,
         strength_diff: int,
     ) -> BetRule | None:
         """
@@ -238,17 +153,24 @@ class BettingRulesEngine:
             WIN_OR_LOSE = 'win_or_lose'
             GOAL = 'goal'
 
-        I want to rework betting rules. 
-        Our rules is very common and predictive, everyone uses these rules. 
+        I want to rework betting rules.
+        Our rules is very common and predictive, everyone uses these rules.
         I want to pick match to bet by the following criterias:
 
-        - team from top-10 and >= 3 consecutive losses -> draw_or_win
-        - team from top-5 and >= 2 consecutive losses -> draw_or_win
-        - team from top-10 and >= 3 consecutive draws -> win_or_lose
-        - team has no goals >= 3 consecutive matches -> goal
+        - team has >= 3 consecutive losses -> draw_or_win, base confidence 0.5
+            if team from top-10, add 0.1 to confidence
+            if team from top-5, add 0.2 to confidence
+            if team has no goals in last 2 matches, add 0.05 to confidence
+            if team has goals in last 3, 4 or 5 matches, add 0.05 to confidence for each match
 
-
-
+        - team has >= 3 consecutive draws -> win_or_lose, base confidence 0.5
+            if team from top-10, add 0.1 to confidence
+            if team from top-5, add 0.2 to confidence
+            if team has no goals in last 2 matches, add 0.05 to confidence
+            if team has goals in last 3, 4 or 5 matches, add 0.05 to confidence for each match
+        - team from top-5 and >= 2 consecutive losses -> draw_or_win, base confidence 0.5
+            if team has no goals in last 2 matches, add 0.05 to confidence
+            if team has goals in last 3, 4 or 5 matches, add 0.05 to confidence for each match
         """
 
         # Rule 1: Strong team vs weak team with poor form
@@ -304,8 +226,8 @@ class BettingRulesEngine:
     def _rule_strong_vs_weak_poor_form(
         self,
         match: Match,
-        home_analysis: dict[str, Any],
-        away_analysis: dict[str, Any],
+        home_analysis: TeamAnalysis,
+        away_analysis: TeamAnalysis,
         strength_diff: int,
     ) -> BetRule | None:
         """Rule: Strong team vs weak team with poor form"""
@@ -323,19 +245,19 @@ class BettingRulesEngine:
 
         # Check if weak team has poor form (multiple indicators)
         weak_team_poor_form = (
-            weak_team_analysis['consecutive_losses'] >= 2
-            or weak_team_analysis['consecutive_no_goals'] >= 2
-            or weak_team_analysis['win_rate'] < 0.3
+            weak_team_analysis.consecutive_losses >= 2
+            or weak_team_analysis.consecutive_no_goals >= 2
+            or weak_team_analysis.win_rate < 0.3
         )
 
         # Check if strong team is in good form
         strong_team_good_form = (
-            strong_team_analysis['consecutive_wins'] >= 2 or strong_team_analysis['win_rate'] >= 0.6
+            strong_team_analysis.consecutive_wins >= 2 or strong_team_analysis.win_rate >= 0.6
         )
 
         if weak_team_poor_form and strong_team_good_form:
-            strong_team = strong_team_analysis['team']
-            weak_team = weak_team_analysis['team']
+            strong_team = strong_team_analysis.team
+            weak_team = weak_team_analysis.team
 
             # Calculate confidence based on multiple factors
             base_confidence = 0.75
@@ -345,11 +267,11 @@ class BettingRulesEngine:
                 base_confidence += 0.10
 
             # Boost confidence for strong team in good form
-            if strong_team_analysis['consecutive_wins'] >= 3:
+            if strong_team_analysis.consecutive_wins >= 3:
                 base_confidence += 0.05
 
             # Boost confidence for weak team in very poor form
-            if weak_team_analysis['consecutive_losses'] >= 3:
+            if weak_team_analysis.consecutive_losses >= 3:
                 base_confidence += 0.05
 
             confidence = min(0.90, base_confidence)
@@ -366,11 +288,11 @@ class BettingRulesEngine:
                     'strong_team': strong_team.name,
                     'weak_team': weak_team.name,
                     'strength_difference': strength_diff,
-                    'strong_team_win_rate': strong_team_analysis['win_rate'],
-                    'strong_team_consecutive_wins': strong_team_analysis['consecutive_wins'],
-                    'weak_team_consecutive_losses': weak_team_analysis['consecutive_losses'],
-                    'weak_team_consecutive_no_goals': weak_team_analysis['consecutive_no_goals'],
-                    'weak_team_win_rate': weak_team_analysis['win_rate'],
+                    'strong_team_win_rate': strong_team_analysis.win_rate,
+                    'strong_team_consecutive_wins': strong_team_analysis.consecutive_wins,
+                    'weak_team_consecutive_losses': weak_team_analysis.consecutive_losses,
+                    'weak_team_consecutive_no_goals': weak_team_analysis.consecutive_no_goals,
+                    'weak_team_win_rate': weak_team_analysis.win_rate,
                     'expected_outcome': f'{strong_team.name} to win',
                 },
             )
@@ -378,32 +300,32 @@ class BettingRulesEngine:
         return None
 
     def _rule_both_teams_poor_form(
-        self, match: Match, home_analysis: dict[str, Any], away_analysis: dict[str, Any]
+        self, match: Match, home_analysis: TeamAnalysis, away_analysis: TeamAnalysis
     ) -> BetRule | None:
         """Rule: Both teams in poor form (draw likely)"""
         # Check if both teams have poor form using multiple indicators
         home_poor_form = (
-            home_analysis['consecutive_losses'] >= 2
-            or home_analysis['consecutive_no_goals'] >= 2
-            or home_analysis['win_rate'] < 0.3
+            home_analysis.consecutive_losses >= 2
+            or home_analysis.consecutive_no_goals >= 2
+            or home_analysis.win_rate < 0.3
         )
         away_poor_form = (
-            away_analysis['consecutive_losses'] >= 2
-            or away_analysis['consecutive_no_goals'] >= 2
-            or away_analysis['win_rate'] < 0.3
+            away_analysis.consecutive_losses >= 2
+            or away_analysis.consecutive_no_goals >= 2
+            or away_analysis.win_rate < 0.3
         )
 
         if home_poor_form and away_poor_form:
             # Calculate confidence based on how poor both teams are
             home_poor_score = (
-                home_analysis['consecutive_losses'] * 0.3
-                + home_analysis['consecutive_no_goals'] * 0.2
-                + (0.5 - home_analysis['win_rate']) * 0.5
+                home_analysis.consecutive_losses * 0.3
+                + home_analysis.consecutive_no_goals * 0.2
+                + (0.5 - home_analysis.win_rate) * 0.5
             )
             away_poor_score = (
-                away_analysis['consecutive_losses'] * 0.3
-                + away_analysis['consecutive_no_goals'] * 0.2
-                + (0.5 - away_analysis['win_rate']) * 0.5
+                away_analysis.consecutive_losses * 0.3
+                + away_analysis.consecutive_no_goals * 0.2
+                + (0.5 - away_analysis.win_rate) * 0.5
             )
 
             # Higher confidence when both teams are clearly struggling
@@ -420,12 +342,12 @@ class BettingRulesEngine:
                 details={
                     'home_team': match.home_team.name,
                     'away_team': match.away_team.name,
-                    'home_consecutive_losses': home_analysis['consecutive_losses'],
-                    'home_consecutive_no_goals': home_analysis['consecutive_no_goals'],
-                    'home_win_rate': home_analysis['win_rate'],
-                    'away_consecutive_losses': away_analysis['consecutive_losses'],
-                    'away_consecutive_no_goals': away_analysis['consecutive_no_goals'],
-                    'away_win_rate': away_analysis['win_rate'],
+                    'home_consecutive_losses': home_analysis.consecutive_losses,
+                    'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
+                    'home_win_rate': home_analysis.win_rate,
+                    'away_consecutive_losses': away_analysis.consecutive_losses,
+                    'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
+                    'away_win_rate': away_analysis.win_rate,
                     'expected_outcome': 'draw',
                 },
             )
@@ -884,68 +806,6 @@ class BettingRulesEngine:
 
         return None
 
-    def _get_recent_matches(self, team: Team, count: int) -> list[Match]:
-        """Get recent matches for a team"""
-        try:
-            # Get matches where team participated
-            matches = (
-                Match.select()
-                .where(
-                    ((Match.home_team == team) | (Match.away_team == team))
-                    & (Match.status == 'finished')
-                )
-                .order_by(Match.match_date.desc())
-                .limit(count)
-            )
-            match_list = list(matches)
-            logger.debug(
-                f'Found {len(match_list)} recent matches for {team.name} (requested: {count})'
-            )
-            if match_list:
-                logger.debug(
-                    f'Most recent match: {match_list[0].home_team.name} vs {match_list[0].away_team.name} on {match_list[0].match_date}'
-                )
-            return match_list
-        except Exception as e:
-            logger.error(f'Error getting recent matches for {team.name}: {e}')
-            return []
-
-    def _team_won(self, match: Match, team: Team) -> bool:
-        """Check if team won the match"""
-        if match.home_score is None or match.away_score is None:
-            return False
-
-        if match.home_team == team:
-            return match.home_score > match.away_score
-        else:
-            return match.away_score > match.home_score
-
-    def _team_lost(self, match: Match, team: Team) -> bool:
-        """Check if team lost the match"""
-        if match.home_score is None or match.away_score is None:
-            return False
-
-        if match.home_team == team:
-            return match.home_score < match.away_score
-        else:
-            return match.away_score < match.home_score
-
-    def _team_drew(self, match: Match, team: Team) -> bool:
-        """Check if team drew the match"""
-        if match.home_score is None or match.away_score is None:
-            return False
-
-        return match.home_score == match.away_score
-
-    def _team_no_goals(self, match: Match, team: Team) -> bool:
-        """Check if team scored no goals in the match"""
-        if match.home_score is None or match.away_score is None:
-            return False
-
-        if match.home_team == team:
-            return match.home_score == 0
-        else:
-            return match.away_score == 0
 
     def save_opportunity(self, opportunity: BetRule) -> BettingOpportunity:
         """Save betting opportunity to database"""

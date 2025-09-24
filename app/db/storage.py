@@ -192,6 +192,32 @@ class FootballDataStorage:
             .execute()
         )
 
+    def get_team_recent_finished_matches(self, team: Team, count: int = 5) -> list[Match]:
+        """Get recent finished matches for a team"""
+        try:
+            # Get matches where team participated
+            matches = (
+                Match.select()
+                .where(
+                    ((Match.home_team == team) | (Match.away_team == team))
+                    & (Match.status == 'finished')
+                )
+                .order_by(Match.match_date.desc())
+                .limit(count)
+            )
+            match_list = list(matches)
+            logger.debug(
+                f'Found {len(match_list)} recent matches for {team.name} (requested: {count})'
+            )
+            if match_list:
+                logger.debug(
+                    f'Most recent match: {match_list[0].home_team.name} vs {match_list[0].away_team.name} on {match_list[0].match_date}'
+                )
+            return match_list
+        except Exception as e:
+            logger.error(f'Error getting recent matches for {team.name}: {e}')
+            return []
+
     def get_league_teams(self, league_name: str, country: str) -> list[Team]:
         """Get all teams for a specific league"""
         try:
