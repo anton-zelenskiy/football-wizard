@@ -230,15 +230,24 @@ class BettingRulesEngine:
         - win
         - lose
 
+        class BetType:
+            WIN = 'win'
+            DRAW = 'draw'
+            LOSE = 'lose'
+            DRAW_OR_WIN = 'draw_or_win'
+            WIN_OR_LOSE = 'win_or_lose'
+            GOAL = 'goal'
+
+        I want to rework betting rules. 
+        Our rules is very common and predictive, everyone uses these rules. 
+        I want to pick match to bet by the following criterias:
+
+        - team from top-10 and >= 3 consecutive losses -> draw_or_win
+        - team from top-5 and >= 2 consecutive losses -> draw_or_win
+        - team from top-10 and >= 3 consecutive draws -> win_or_lose
+        - team has no goals >= 3 consecutive matches -> goal
 
 
-
-        - team from top-10 and 3 and more last matches - losses -> 1x
-            -no goals in the last matches mustt increase confidence
-        - team from top-10 and 3 and more draws -> 12 (win or lose)
-        - team from top-5 and >= 2 losses in a row -> 1x
-        - team from top-10 and no goals in the last 2 and more matches
-        - team from out of top 10 and 3 and more last matches - wins -> ?????
 
         """
 
@@ -937,17 +946,6 @@ class BettingRulesEngine:
             return match.home_score == 0
         else:
             return match.away_score == 0
-
-    def _match_to_dict(self, match: Match) -> dict[str, Any]:
-        """Convert match to dictionary for details"""
-        return {
-            'date': match.match_date.isoformat() if match.match_date else None,
-            'home_team': match.home_team.name,
-            'away_team': match.away_team.name,
-            'home_score': match.home_score,
-            'away_score': match.away_score,
-            'status': match.status,
-        }
 
     def save_opportunity(self, opportunity: BetRule) -> BettingOpportunity:
         """Save betting opportunity to database"""
