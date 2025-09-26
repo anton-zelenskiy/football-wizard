@@ -1,6 +1,6 @@
 import structlog
 
-from app.bet_rules.betting_rules import BettingRulesEngine
+from app.bet_rules.rule_engine import BettingRulesEngine
 from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
 from app.telegram.bot import get_bot
@@ -27,7 +27,7 @@ class BettingTasks:
                 # Save opportunities to database
                 saved_opportunities = []
                 for opp in opportunities:
-                    self.rules_engine.save_opportunity(opp)
+                    self.storage.save_opportunity(opp)
                     saved_opportunities.append(opp)
 
                 # Send notifications to users
@@ -66,7 +66,7 @@ class BettingTasks:
                 # Save opportunities to database
                 saved_opportunities = []
                 for opp in opportunities:
-                    self.rules_engine.save_opportunity(opp)
+                    self.storage.save_opportunity(opp)
                     saved_opportunities.append(opp)
 
                 # Send immediate notifications for live opportunities

@@ -8,8 +8,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from app.db.models import League, Match, Team
 from app.bet_rules.team_analysis import TeamAnalysis, TeamAnalysisService
+from app.db.models import League, Match, Team
 
 
 @pytest.fixture
@@ -53,11 +53,11 @@ def create_team_analysis_from_dict(team, team_type, analysis_dict):
     total_matches = analysis_dict.get('total_matches', 100)  # Use 100 for better precision
     win_rate = analysis_dict.get('win_rate', 0.0)
     draw_rate = analysis_dict.get('draw_rate', 0.0)
-    
+
     wins = int(total_matches * win_rate)
     draws = int(total_matches * draw_rate)
     losses = total_matches - wins - draws
-    
+
     return TeamAnalysis(
         team=team,
         team_type=team_type,
@@ -402,7 +402,7 @@ def test_top_team_classification(team_analysis_service, rank, expected_is_top):
 def test_team_analysis_creation(mock_teams):
     """Test TeamAnalysis model creation"""
     home_team, _ = mock_teams
-    
+
     analysis = TeamAnalysis(
         team=home_team,
         team_type='home',
@@ -420,7 +420,7 @@ def test_team_analysis_creation(mock_teams):
         is_top_team=True,
         is_top5_team=True,
     )
-    
+
     assert analysis.team == home_team
     assert analysis.team_type == 'home'
     assert analysis.rank == 5
@@ -440,7 +440,7 @@ def test_team_analysis_creation(mock_teams):
 def test_computed_fields(mock_teams):
     """Test computed fields in TeamAnalysis"""
     home_team, _ = mock_teams
-    
+
     analysis = TeamAnalysis(
         team=home_team,
         team_type='home',
@@ -458,7 +458,7 @@ def test_computed_fields(mock_teams):
         is_top_team=True,
         is_top5_team=True,
     )
-    
+
     # Test computed rates
     assert analysis.win_rate == 0.6  # 6/10
     assert analysis.draw_rate == 0.2  # 2/10
@@ -468,7 +468,7 @@ def test_computed_fields(mock_teams):
 def test_computed_fields_with_zero_matches(mock_teams):
     """Test computed fields when no matches exist"""
     home_team, _ = mock_teams
-    
+
     analysis = TeamAnalysis(
         team=home_team,
         team_type='home',
@@ -486,7 +486,7 @@ def test_computed_fields_with_zero_matches(mock_teams):
         is_top_team=True,
         is_top5_team=True,
     )
-    
+
     # Test computed rates with zero matches
     assert analysis.win_rate == 0.0
     assert analysis.draw_rate == 0.0
@@ -496,20 +496,20 @@ def test_computed_fields_with_zero_matches(mock_teams):
 def test_goals_calculations(mock_teams):
     """Test goals_scored and goals_conceded computed fields"""
     home_team, away_team = mock_teams
-    
+
     # Create mock matches
     match1 = Mock(spec=Match)
     match1.home_team = home_team
     match1.away_team = away_team
     match1.home_score = 2
     match1.away_score = 1
-    
+
     match2 = Mock(spec=Match)
     match2.home_team = home_team
     match2.away_team = away_team
     match2.home_score = 1
     match2.away_score = 0
-    
+
     analysis = TeamAnalysis(
         team=home_team,
         team_type='home',
@@ -527,7 +527,7 @@ def test_goals_calculations(mock_teams):
         is_top_team=True,
         is_top5_team=True,
     )
-    
+
     # Test goals calculations
     assert analysis.goals_scored == 3  # 2 + 1
     assert analysis.goals_conceded == 1  # 1 + 0

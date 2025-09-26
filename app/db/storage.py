@@ -3,6 +3,10 @@ from typing import Any
 
 import structlog
 
+from app.bet_rules.models import (
+    Bet,
+    MatchResult,
+)
 from app.scraper.livesport_scraper import CommonMatchData
 
 from .models import BettingOpportunity, League, Match, Team, db
@@ -301,6 +305,7 @@ class FootballDataStorage:
             BettingOpportunity.select()
             .join(Match, on=(BettingOpportunity.match == Match.id))
             .where(BettingOpportunity.outcome.is_null())
+            .where(BettingOpportunity.status == 'finished')
             .where(Match.home_score.is_null(False))
             .where(Match.away_score.is_null(False))
         )
@@ -321,85 +326,61 @@ class FootballDataStorage:
 
         logger.info(f'Updated {updated_count} betting outcomes')
 
+    def save_opportunity(self, opportunity: 'Bet') -> BettingOpportunity:
+        """Save betting opportunity to database"""
+        match = None
+        if opportunity.match_id:
+            try:
+                match = Match.get(Match.id == opportunity.match_id)
+            except Match.DoesNotExist:
+                logger.warning(f'Match {opportunity.match_id} not found for betting opportunity')
+
+        # Determine opportunity type based on rule name
+        opportunity_type = (
+            'live_opportunity' if 'Live' in opportunity.rule_name else 'historical_analysis'
+        )
+
+        # Add rule_type to details for outcome determination
+        details = opportunity.details.copy()
+        details['rule_type'] = opportunity.rule_type
+        details['team_analyzed'] = opportunity.team_analyzed
+
+        db_opportunity = BettingOpportunity(
+            match=match,
+            opportunity_type=opportunity_type,
+            rule_triggered=opportunity.rule_name,
+            confidence_score=opportunity.confidence,
+        )
+        db_opportunity.set_details(details)
+        db_opportunity.save()
+        return db_opportunity
+
     def _determine_betting_outcome(
         self, opportunity: BettingOpportunity, match: Match
     ) -> str | None:
         """Determine if a betting opportunity was won or lost based on the rule and match result"""
-        rule_name = opportunity.rule_triggered.lower()
-        home_score = match.home_score
-        away_score = match.away_score
+        from app.bet_rules.rule_engine import BettingRulesEngine
+        
+        # Get opportunity details
+        details = opportunity.get_details()
+        team_analyzed = details.get('team_analyzed', '')
+        rule_type = details.get('rule_type', '')
 
-        if home_score is None or away_score is None:
-            return None
+        # Create MatchResult DTO
+        match_result = MatchResult(
+            home_score=match.home_score,
+            away_score=match.away_score,
+            home_team=match.home_team.name,
+            away_team=match.away_team.name,
+            team_analyzed=team_analyzed,
+        )
 
-        # Determine match result
-        if home_score > away_score:
-            match_result = 'home_win'
-        elif away_score > home_score:
-            match_result = 'away_win'
-        else:
-            match_result = 'draw'
+        # Get the appropriate rule by type and determine outcome
+        engine = BettingRulesEngine()
+        rule = engine.get_rule_by_type(rule_type)
 
-        # Analyze rule and determine outcome
-        if 'strong vs weak poor form' in rule_name:
-            # This rule typically bets on the stronger team to win
-            details = opportunity.get_details()
-            strong_team = details.get('strong_team', '')
-
-            if strong_team == match.home_team.name and match_result == 'home_win':
-                return 'win'
-            elif strong_team == match.away_team.name and match_result == 'away_win':
-                return 'win'
-            else:
-                return 'lose'
-
-        elif 'both teams poor form' in rule_name:
-            # This rule typically bets on a draw
-            return 'win' if match_result == 'draw' else 'lose'
-
-        elif 'top team losing streak' in rule_name:
-            # This rule bets on the top team to break their losing streak
-            details = opportunity.get_details()
-            top_team = details.get('top_team', '')
-
-            if top_team == match.home_team.name and match_result == 'home_win':
-                return 'win'
-            elif top_team == match.away_team.name and match_result == 'away_win':
-                return 'win'
-            else:
-                return 'lose'
-
-        elif 'top team drawing streak' in rule_name:
-            # This rule bets on the top team to win (break drawing streak)
-            details = opportunity.get_details()
-            top_team = details.get('top_team', '')
-
-            if top_team == match.home_team.name and match_result == 'home_win':
-                return 'win'
-            elif top_team == match.away_team.name and match_result == 'away_win':
-                return 'win'
-            else:
-                return 'lose'
-
-        elif 'top team no goals' in rule_name:
-            # This rule bets on the top team to score and win
-            details = opportunity.get_details()
-            top_team = details.get('top_team', '')
-
-            if top_team == match.home_team.name and match_result == 'home_win':
-                return 'win'
-            elif top_team == match.away_team.name and match_result == 'away_win':
-                return 'win'
-            else:
-                return 'lose'
-
-        elif 'red card draw second half' in rule_name:
-            # This rule bets on a draw in the second half
-            return 'win' if match_result == 'draw' else 'lose'
-
-        elif 'draw top5 vs below' in rule_name:
-            # This rule bets on a draw when top-5 team plays below-top-5 team
-            return 'win' if match_result == 'draw' else 'lose'
+        if rule:
+            return rule.determine_outcome(match_result)
 
         # Default: unable to determine outcome
-        return 'pending'
+        return None

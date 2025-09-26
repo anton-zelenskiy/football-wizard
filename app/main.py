@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.legacy_routes import router as legacy_router
 from app.api.root import router as root_router
 from app.api.routes import router as api_router
-from app.betting_rules import BettingRulesEngine
+from app.bet_rules.rule_engine import BettingRulesEngine
 from app.db.models import create_tables
 from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import LivesportScraper

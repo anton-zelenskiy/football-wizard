@@ -29,9 +29,6 @@ class TeamAnalysis(BaseModel):
     draws: int = Field(default=0, ge=0, description='Number of draws')
     losses: int = Field(default=0, ge=0, description='Number of losses')
 
-    # Performance indicators
-    is_top_team: bool = Field(default=False, description='Is team in top teams')
-    is_top5_team: bool = Field(default=False, description='Is team in top 5')
 
     # Computed rates
     @computed_field
@@ -72,6 +69,18 @@ class TeamAnalysis(BaseModel):
             if match.home_score is not None and match.away_score is not None
         )
 
+    @computed_field
+    @property
+    def is_top_team(self) -> bool:
+        """Is team in top teams (rank <= 8)"""
+        return self.rank is not None and self.rank <= 8
+
+    @computed_field
+    @property
+    def is_top5_team(self) -> bool:
+        """Is team in top 5 (rank <= 5)"""
+        return self.rank is not None and self.rank <= 5
+
     class Config:
         arbitrary_types_allowed = True  # Allow Team and Match objects
 
@@ -97,10 +106,6 @@ class TeamAnalysisService:
             total_matches=len(recent_matches),
         )
 
-        # Set team classification
-        if team.rank:
-            analysis.is_top_team = team.rank <= self.top_teams_count
-            analysis.is_top5_team = team.rank <= 5
 
         if not recent_matches:
             return analysis

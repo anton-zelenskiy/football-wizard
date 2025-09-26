@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.betting_rules import BettingOpportunity as RuleOpportunity
+from app.bet_rules.models import Bet
 from app.db.models import NotificationLog, TelegramUser
 from app.settings import settings
 
@@ -120,7 +120,9 @@ class BettingBot:
             keyboard = InlineKeyboardBuilder()
             if user.is_active:
                 keyboard.add(InlineKeyboardButton(text="⚙️ Settings", callback_data="settings"))
-                keyboard.add(InlineKeyboardButton(text="🔕 Unsubscribe", callback_data="unsubscribe"))
+                keyboard.add(InlineKeyboardButton(
+                    text="🔕 Unsubscribe", callback_data="unsubscribe"
+                ))
             else:
                 keyboard.add(InlineKeyboardButton(text="✅ Subscribe", callback_data="subscribe"))
 
@@ -305,8 +307,9 @@ class BettingBot:
                 "live": "Live (Every 3 minutes)"
             }
 
+            frequency_name = frequency_names.get(frequency, frequency.title())
             await callback_query.message.edit_text(
-                f"✅ Notification frequency changed to: {frequency_names.get(frequency, frequency.title())}"
+                f"✅ Notification frequency changed to: {frequency_name}"
             )
             logger.info(f"User {user_id} changed frequency to {frequency}")
 
@@ -315,7 +318,7 @@ class BettingBot:
                 "❌ You're not registered. Use /start to subscribe."
             )
 
-    async def send_betting_opportunity(self, opportunity: RuleOpportunity) -> None:
+    async def send_betting_opportunity(self, opportunity: Bet) -> None:
         """Send betting opportunity to all subscribed users"""
         try:
             # Get all active users
@@ -343,7 +346,10 @@ class BettingBot:
                     await asyncio.sleep(0.1)
 
                 except Exception as e:
-                    logger.error(f"Failed to send notification to user {user.telegram_id}", error=str(e))
+                    logger.error(
+                        f"Failed to send notification to user {user.telegram_id}", 
+                        error=str(e)
+                    )
 
                     # Log the failed notification
                     NotificationLog.create(
@@ -359,9 +365,13 @@ class BettingBot:
         except Exception as e:
             logger.error("Error sending betting opportunities", error=str(e))
 
-    def _format_opportunity_message(self, opportunity: RuleOpportunity) -> str:
+    def _format_opportunity_message(self, opportunity: Bet) -> str:
         """Format betting opportunity as Telegram message"""
-        confidence_emoji = "🟢" if opportunity.confidence >= 0.8 else "🟡" if opportunity.confidence >= 0.6 else "🔴"
+        confidence_emoji = (
+            "🟢" if opportunity.confidence >= 0.8 
+            else "🟡" if opportunity.confidence >= 0.6 
+            else "🔴"
+        )
 
         message = (
             f"🎯 <b>Betting Opportunity</b>\n\n"
@@ -369,14 +379,14 @@ class BettingBot:
             f"⚽ <b>{opportunity.home_team}</b> vs <b>{opportunity.away_team}</b>\n"
             f"🏟️ {opportunity.league} ({opportunity.country})\n"
             f"{confidence_emoji} <b>Confidence: {opportunity.confidence:.1%}</b>\n\n"
-            f"💡 <b>Reasoning:</b>\n{opportunity.reasoning}\n\n"
-            f"💰 <b>Recommendation:</b>\n{opportunity.recommended_bet}\n\n"
-            f"📊 Type: {opportunity.opportunity_type.replace('_', ' ').title()}"
+            f"💡 <b>Bet Type:</b> {opportunity.bet_type.value.replace('_', ' ').title()}\n"
+            f"🎯 <b>Team Analyzed:</b> {opportunity.team_analyzed}\n\n"
+            f"📊 Rule Type: {opportunity.rule_type.replace('_', ' ').title()}"
         )
 
         return message
 
-    async def send_daily_summary(self, opportunities: list[RuleOpportunity]) -> None:
+    async def send_daily_summary(self, opportunities: list[Bet]) -> None:
         """Send daily summary of betting opportunities"""
         if not opportunities:
             return
@@ -399,14 +409,17 @@ class BettingBot:
                     await asyncio.sleep(0.1)
 
                 except Exception as e:
-                    logger.error(f"Failed to send daily summary to user {user.telegram_id}", error=str(e))
+                    logger.error(
+                        f"Failed to send daily summary to user {user.telegram_id}", 
+                        error=str(e)
+                    )
 
             logger.info(f"Sent daily summary to {len(users)} users")
 
         except Exception as e:
             logger.error("Error sending daily summary", error=str(e))
 
-    def _format_daily_summary(self, opportunities: list[RuleOpportunity]) -> str:
+    def _format_daily_summary(self, opportunities: list[Bet]) -> str:
         """Format daily summary message"""
         message = (
             f"📊 <b>Daily Betting Opportunities Summary</b>\n\n"
@@ -414,7 +427,11 @@ class BettingBot:
         )
 
         for i, opp in enumerate(opportunities[:10], 1):  # Limit to 10
-            confidence_emoji = "🟢" if opp.confidence >= 0.8 else "🟡" if opp.confidence >= 0.6 else "🔴"
+            confidence_emoji = (
+                "🟢" if opp.confidence >= 0.8 
+                else "🟡" if opp.confidence >= 0.6 
+                else "🔴"
+            )
             message += (
                 f"{i}. {confidence_emoji} <b>{opp.rule_name}</b>\n"
                 f"   {opp.home_team} vs {opp.away_team}\n"
