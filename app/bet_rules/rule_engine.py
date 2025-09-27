@@ -65,7 +65,8 @@ class BettingRulesEngine:
 
             except Exception as e:
                 logger.error(
-                    f'Error analyzing scheduled match {match.home_team.name} vs {match.away_team.name}',
+                    f'Error analyzing scheduled match {match.home_team.name} vs '
+                    f'{match.away_team.name}',
                     error=str(e),
                 )
 
@@ -162,6 +163,7 @@ class BettingRulesEngine:
             away_team=match.away_team.name,
             league=match.league.name,
             country=match.league.country,
+            match_date=match.match_date.strftime('%Y-%m-%d %H:%M') if match.match_date else None,
             rule_name=rule.name,
             rule_type=rule.rule_type,
             bet_type=rule.bet_type,
@@ -254,6 +256,10 @@ class BettingRulesEngine:
                 away_team=match.away_team.name,
                 league=match.league.name,
                 country=match.league.country,
+                match_date=(
+                    match.match_date.strftime('%Y-%m-%d %H:%M') 
+                    if match.match_date else None
+                ),
                 rule_name=self.live_rule.name,
                 rule_type=self.live_rule.rule_type,
                 bet_type=self.live_rule.bet_type,

@@ -250,31 +250,30 @@ class LiveMatchRedCardRule(BettingRule):
         return 0.0
 
     def calculate_live_confidence(
-        self, 
-        home_analysis: TeamAnalysis, 
+        self,
+        home_analysis: TeamAnalysis,
         away_analysis: TeamAnalysis,
         red_cards_home: int,
         red_cards_away: int,
         home_score: int,
-        away_score: int
+        away_score: int,
     ) -> tuple[float, str]:
         """Calculate confidence for live match with red cards"""
         # Only apply if there's a red card and the score is tied
         if (red_cards_home == 0 and red_cards_away == 0) or home_score != away_score:
-            return 0.0, "No red card or not a draw"
-        
+            return 0.0, 'No red card or not a draw'
+
         confidence = self.base_confidence
-        
+
         # Determine which team has the red card
         if red_cards_home > 0 and red_cards_away == 0:
             # Home team has red card, bet on away team
             team_analyzed = away_analysis.team.name
-            opponent_analysis = home_analysis
-            
+
             # If team without red card is weaker, increase confidence
             if away_analysis.team.rank > home_analysis.team.rank:
                 confidence += 0.1
-                
+
             # Add confidence based on consecutive matches for team without red card
             if away_analysis.consecutive_no_goals >= 2:
                 confidence += 0.05 * min(away_analysis.consecutive_no_goals - 1, 3)
@@ -282,16 +281,15 @@ class LiveMatchRedCardRule(BettingRule):
                 confidence += 0.05 * min(away_analysis.consecutive_draws - 1, 2)
             if away_analysis.consecutive_losses >= 2:
                 confidence += 0.05 * min(away_analysis.consecutive_losses - 1, 2)
-                
+
         elif red_cards_away > 0 and red_cards_home == 0:
             # Away team has red card, bet on home team
             team_analyzed = home_analysis.team.name
-            opponent_analysis = away_analysis
-            
+
             # If team without red card is weaker, increase confidence
             if home_analysis.team.rank > away_analysis.team.rank:
                 confidence += 0.1
-                
+
             # Add confidence based on consecutive matches for team without red card
             if home_analysis.consecutive_no_goals >= 2:
                 confidence += 0.05 * min(home_analysis.consecutive_no_goals - 1, 3)
@@ -300,8 +298,8 @@ class LiveMatchRedCardRule(BettingRule):
             if home_analysis.consecutive_losses >= 2:
                 confidence += 0.05 * min(home_analysis.consecutive_losses - 1, 2)
         else:
-            return 0.0, "Both teams have red cards or invalid state"
-        
+            return 0.0, 'Both teams have red cards or invalid state'
+
         return min(1.0, confidence), team_analyzed
 
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
@@ -337,6 +335,7 @@ class Bet(BaseModel):
     away_team: str = Field(description='Away team name')
     league: str = Field(description='League name')
     country: str = Field(description='Country name')
+    match_date: str | None = Field(default=None, description='Match date and time')
     rule_name: str = Field(description='Rule that triggered the opportunity')
     rule_type: str = Field(description='Rule type identifier')
     bet_type: BetType = Field(description='Recommended bet type')

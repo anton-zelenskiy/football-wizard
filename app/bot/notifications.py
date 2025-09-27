@@ -138,20 +138,35 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
         f"Found {len(opportunities)} opportunities today:\n\n"
     )
 
-    for i, opp in enumerate(opportunities[:10], 1):  # Limit to 10
+    for i, opp in enumerate(opportunities, 1):  # Show all opportunities
         confidence_emoji = (
             "🟢" if opp.confidence >= 0.8 
             else "🟡" if opp.confidence >= 0.6 
             else "🔴"
         )
+
+        # Format bet type for display
+        bet_type_display = opp.bet_type.value.replace('_', ' ').title()
+
+        # Determine which team to bet on based on team_analyzed
+        if opp.team_analyzed == opp.home_team:
+            bet_team = f"🏠 {opp.home_team}"
+        elif opp.team_analyzed == opp.away_team:
+            bet_team = f"✈️ {opp.away_team}"
+        else:
+            # Both teams or unclear - show both
+            bet_team = f"🏠 {opp.home_team} or ✈️ {opp.away_team}"
+
+        # Format match date if available
+        match_date_display = f"📅 {opp.match_date}" if opp.match_date else "📅 Date TBD"
         message += (
             f"{i}. {confidence_emoji} <b>{opp.rule_name}</b>\n"
-            f"   {opp.home_team} vs {opp.away_team}\n"
-            f"   Confidence: {opp.confidence:.1%}\n\n"
+            f"   ⚽ {opp.home_team} vs {opp.away_team}\n"
+            f"   🎯 Bet: {bet_type_display} on {bet_team}\n"
+            f"   📊 Confidence: {opp.confidence:.1%}\n"
+            f"   🏟️ {opp.league} ({opp.country})\n"
+            f"   {match_date_display}\n\n"
         )
-
-    if len(opportunities) > 10:
-        message += f"... and {len(opportunities) - 10} more opportunities\n\n"
 
     message += "Use /settings to adjust your notification preferences."
 

@@ -1,5 +1,6 @@
 import structlog
 
+from app.bet_rules.models import Bet
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
 from app.db.storage import FootballDataStorage
@@ -23,11 +24,8 @@ class BettingTasks:
             opportunities = self.rules_engine.analyze_scheduled_matches()
 
             if opportunities:
-                # Save opportunities to database
-                saved_opportunities = []
-                for opp in opportunities:
-                    self.storage.save_opportunity(opp)
-                    saved_opportunities.append(opp)
+                # Save opportunities to database iteratively
+                saved_opportunities = await self._save_opportunities_iteratively(opportunities)
 
                 # Send notifications to users
                 await send_daily_summary(saved_opportunities)
@@ -51,22 +49,18 @@ class BettingTasks:
         try:
             logger.info('Starting live matches analysis')
 
-            # First, scrape and save live matches
+            # First, scrape and save live matches iteratively
             live_matches_data: list[CommonMatchData] = await self.scraper.scrape_live_matches()
             if live_matches_data:
-                for match in live_matches_data:
-                    self.storage.save_match(match)
-                logger.info(f'Saved {len(live_matches_data)} live matches')
+                saved_count = await self._save_matches_iteratively(live_matches_data, 'live')
+                logger.info(f'Saved {saved_count} live matches')
 
             # Analyze live matches for betting opportunities
             opportunities = self.rules_engine.analyze_live_matches()
 
             if opportunities:
-                # Save opportunities to database
-                saved_opportunities = []
-                for opp in opportunities:
-                    self.storage.save_opportunity(opp)
-                    saved_opportunities.append(opp)
+                # Save opportunities to database iteratively
+                saved_opportunities = await self._save_opportunities_iteratively(opportunities)
 
                 # Send immediate notifications for live opportunities
                 for opp in saved_opportunities:
@@ -82,60 +76,112 @@ class BettingTasks:
             logger.error('Error in live matches analysis task', error=str(e))
             return f'Error in live analysis: {str(e)}'
 
+    async def _save_opportunities_iteratively(self, opportunities: list[Bet]) -> list[Bet]:
+        """Save betting opportunities iteratively with error handling"""
+        saved_opportunities = []
+
+        for opp in opportunities:
+            try:
+                self.storage.save_opportunity(opp)
+                saved_opportunities.append(opp)
+            except Exception as e:
+                logger.error(f'Error saving opportunity {opp.rule_name}: {e}')
+                continue
+
+        return saved_opportunities
+
     async def refresh_league_data_task(self, ctx) -> str:
-        """Refresh league standings and team statistics"""
+        """Refresh league standings and team statistics iteratively"""
         logger.info('Starting league data refresh task')
 
         try:
-            # Scrape all monitored leagues
-            all_league_data = await self.scraper.scrape_all_monitored_leagues()
+            total_leagues = 0
+            total_standings = 0
+            total_matches = 0
+            total_fixtures = 0
 
-            for league_data in all_league_data:
-                league_name = league_data['league']
-                country = league_data['country']
-                standings = league_data['standings']
-                matches: list[CommonMatchData] = league_data['matches']
-                fixtures: list[CommonMatchData] = league_data.get('fixtures', [])
+            # Process each league individually to avoid memory issues
+            for country, leagues in self.scraper.monitored_leagues.items():
+                for league_name in leagues:
+                    try:
+                        logger.info(f'Processing {country}: {league_name}')
 
-                logger.info(f'Processing {country}: {league_name}')
+                        # Scrape and save league data iteratively
+                        league_stats = await self._process_single_league(country, league_name)
 
-                # Save league if it doesn't exist
-                self.storage.save_league(
-                    {'league': {'name': league_name}, 'country': {'name': country}}
-                )
+                        total_leagues += 1
+                        total_standings += league_stats['standings_count']
+                        total_matches += league_stats['matches_count']
+                        total_fixtures += league_stats['fixtures_count']
 
-                # Save team standings
-                if standings:
-                    for team in standings:
-                        self.storage.save_team_standings(team, league_name, country)
-                    logger.info(
-                        f'Saved {len(standings)} team standings for {country} - {league_name}'
-                    )
+                        logger.info(
+                            f'Completed {country}: {league_name} - '
+                            f'Standings: {league_stats["standings_count"]}, '
+                            f'Matches: {league_stats["matches_count"]}, '
+                            f'Fixtures: {league_stats["fixtures_count"]}'
+                        )
 
-                # Save matches
-                if matches:
-                    for match in matches:
-                        self.storage.save_match(match)
-                    logger.info(f'Saved {len(matches)} matches for {country} - {league_name}')
-
-                # Save fixtures
-                if fixtures:
-                    for fixture in fixtures:
-                        self.storage.save_match(fixture)
-                    logger.info(f'Saved {len(fixtures)} fixtures for {country} - {league_name}')
+                    except Exception as e:
+                        logger.error(f'Error processing {country}: {league_name}: {e}')
+                        continue
 
             # Update betting outcomes for finished matches
             self.storage.update_betting_outcomes()
 
             logger.info('League data refresh completed successfully')
-            return f'Refreshed data for {len(all_league_data)} leagues'
+            return (
+                f'Refreshed data for {total_leagues} leagues: '
+                f'{total_standings} standings, {total_matches} matches, {total_fixtures} fixtures'
+            )
 
         except Exception as e:
             logger.error(f'Error in league data refresh task: {e}')
             raise
 
+    async def _process_single_league(self, country: str, league_name: str) -> dict[str, int]:
+        """Process a single league: scrape and save all data iteratively"""
+        stats = {'standings_count': 0, 'matches_count': 0, 'fixtures_count': 0}
+
+        # Save league first
+        self.storage.save_league({'league': {'name': league_name}, 'country': {'name': country}})
+
+        # Scrape and save standings iteratively
+        try:
+            standings = await self.scraper.scrape_league_standings(country, league_name)
+            if standings:
+                for team in standings:
+                    self.storage.save_team_standings(team, league_name, country)
+                stats['standings_count'] = len(standings)
+                logger.debug(f'Saved {len(standings)} team standings for {country} - {league_name}')
+        except Exception as e:
+            logger.error(f'Error scraping standings for {country}: {league_name}: {e}')
+
+        # Scrape and save matches iteratively
+        try:
+            matches = await self.scraper.scrape_league_matches(country, league_name)
+            if matches:
+                for match in matches:
+                    self.storage.save_match(match)
+                stats['matches_count'] = len(matches)
+                logger.debug(f'Saved {len(matches)} matches for {country} - {league_name}')
+        except Exception as e:
+            logger.error(f'Error scraping matches for {country}: {league_name}: {e}')
+
+        # Scrape and save fixtures iteratively
+        try:
+            fixtures = await self.scraper.scrape_league_fixtures(country, league_name)
+            if fixtures:
+                for fixture in fixtures:
+                    self.storage.save_match(fixture)
+                stats['fixtures_count'] = len(fixtures)
+                logger.debug(f'Saved {len(fixtures)} fixtures for {country} - {league_name}')
+        except Exception as e:
+            logger.error(f'Error scraping fixtures for {country}: {league_name}: {e}')
+
+        return stats
+
     async def refresh_live_matches_task(self, ctx) -> str:
-        """Refresh live matches data"""
+        """Refresh live matches data iteratively"""
         logger.info('Starting live matches refresh task')
 
         try:
@@ -143,10 +189,10 @@ class BettingTasks:
             live_matches: list[CommonMatchData] = await self.scraper.scrape_live_matches()
 
             if live_matches:
-                for match in live_matches:
-                    self.storage.save_match(match)
-                logger.info(f'Saved {len(live_matches)} live matches')
-                return f'Updated {len(live_matches)} live matches'
+                # Save matches iteratively
+                saved_count = await self._save_matches_iteratively(live_matches, 'live')
+                logger.info(f'Saved {saved_count} live matches')
+                return f'Updated {saved_count} live matches'
             else:
                 logger.info('No live matches found')
                 return 'No live matches to update'
@@ -154,6 +200,24 @@ class BettingTasks:
         except Exception as e:
             logger.error(f'Error in live matches refresh task: {e}')
             raise
+
+    async def _save_matches_iteratively(
+        self, matches: list[CommonMatchData], match_type: str
+    ) -> int:
+        """Save matches iteratively with error handling"""
+        saved_count = 0
+
+        for match in matches:
+            try:
+                self.storage.save_match(match)
+                saved_count += 1
+            except Exception as e:
+                logger.error(
+                    f'Error saving {match_type} match {match.home_team} vs {match.away_team}: {e}'
+                )
+                continue
+
+        return saved_count
 
 
 # Task functions for arq

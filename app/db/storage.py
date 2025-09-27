@@ -359,7 +359,7 @@ class FootballDataStorage:
     ) -> str | None:
         """Determine if a betting opportunity was won or lost based on the rule and match result"""
         from app.bet_rules.rule_engine import BettingRulesEngine
-        
+
         # Get opportunity details
         details = opportunity.get_details()
         team_analyzed = details.get('team_analyzed', '')
