@@ -417,8 +417,6 @@ def test_team_analysis_creation(mock_teams):
         wins=6,
         draws=2,
         losses=2,
-        is_top_team=True,
-        is_top5_team=True,
     )
 
     assert analysis.team == home_team
@@ -455,8 +453,6 @@ def test_computed_fields(mock_teams):
         wins=6,
         draws=2,
         losses=2,
-        is_top_team=True,
-        is_top5_team=True,
     )
 
     # Test computed rates
@@ -483,8 +479,6 @@ def test_computed_fields_with_zero_matches(mock_teams):
         wins=0,
         draws=0,
         losses=0,
-        is_top_team=True,
-        is_top5_team=True,
     )
 
     # Test computed rates with zero matches
@@ -524,8 +518,6 @@ def test_goals_calculations(mock_teams):
         wins=2,
         draws=0,
         losses=0,
-        is_top_team=True,
-        is_top5_team=True,
     )
 
     # Test goals calculations

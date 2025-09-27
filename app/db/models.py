@@ -110,7 +110,8 @@ class TelegramUser(BaseModel):
     first_name = CharField(null=True)
     last_name = CharField(null=True)
     is_active = BooleanField(default=True)
-    notification_frequency = CharField(default='daily')  # daily, hourly, live
+    daily_notifications = BooleanField(default=True)  # Daily betting opportunities
+    live_notifications = BooleanField(default=True)  # Live match opportunities
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
 

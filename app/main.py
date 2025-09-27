@@ -8,6 +8,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.bot_routes import router as bot_router
 from app.api.legacy_routes import router as legacy_router
 from app.api.root import router as root_router
 from app.api.routes import router as api_router
@@ -16,13 +17,12 @@ from app.db.models import create_tables
 from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import LivesportScraper
 from app.settings import settings
-from app.telegram.bot import get_bot
 
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> None:
     """Application lifespan manager"""
     # Startup
     logger.info('Starting Football Betting Analysis App')
@@ -35,7 +35,6 @@ async def lifespan(app: FastAPI):
     app.state.scraper = LivesportScraper()
     app.state.storage = FootballDataStorage()
     app.state.rules_engine = BettingRulesEngine()
-    app.state.bot = get_bot()
 
     logger.info('App startup completed')
 
@@ -65,3 +64,4 @@ app.add_middleware(
 app.include_router(api_router, prefix='/football')
 app.include_router(legacy_router, prefix='/football')
 app.include_router(root_router, prefix='/football')
+app.include_router(bot_router, prefix='/football/api/v1/bot')

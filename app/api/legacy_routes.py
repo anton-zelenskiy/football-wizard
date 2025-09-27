@@ -167,7 +167,6 @@ async def get_telegram_users():
                     'first_name': user.first_name,
                     'last_name': user.last_name,
                     'is_active': user.is_active,
-                    'notification_frequency': user.notification_frequency,
                     'created_at': user.created_at.isoformat(),
                 }
                 for user in users

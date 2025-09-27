@@ -185,7 +185,7 @@ class LivesportScraper:
                         elif 'event__match--live' in class_name:
                             # Only process matches if we have a current monitored league
                             if not current_league:
-                                logger.debug(f'Skipping match: no monitored league context')
+                                logger.debug('Skipping match: no monitored league context')
                                 continue
 
                             # Extract match data
@@ -200,7 +200,7 @@ class LivesportScraper:
                             away = await away_el.inner_text() if away_el else ''
 
                             if not home or not away:
-                                logger.debug(f'Skipping match: missing team names')
+                                logger.debug('Skipping match: missing team names')
                                 continue
 
                             # Extract scores

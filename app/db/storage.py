@@ -305,7 +305,6 @@ class FootballDataStorage:
             BettingOpportunity.select()
             .join(Match, on=(BettingOpportunity.match == Match.id))
             .where(BettingOpportunity.outcome.is_null())
-            .where(BettingOpportunity.status == 'finished')
             .where(Match.home_score.is_null(False))
             .where(Match.away_score.is_null(False))
         )
@@ -384,3 +383,11 @@ class FootballDataStorage:
 
         # Default: unable to determine outcome
         return None
+
+    def get_live_matches(self) -> list[Match]:
+        """Get all live matches"""
+        try:
+            return list(Match.select().where(Match.status == 'live'))
+        except Exception as e:
+            logger.error(f'Error getting live matches: {e}')
+            return []

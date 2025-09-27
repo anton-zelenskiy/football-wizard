@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # Telegram Bot
     telegram_bot_token: str = ''
+    base_host: str = 'http://localhost:8000'
 
     # App Configuration
     app_name: str = 'Football Betting Analysis'

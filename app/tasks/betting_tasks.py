@@ -1,9 +1,9 @@
 import structlog
 
 from app.bet_rules.rule_engine import BettingRulesEngine
+from app.bot.notifications import send_betting_opportunity, send_daily_summary
 from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
-from app.telegram.bot import get_bot
 
 logger = structlog.get_logger()
 
@@ -13,7 +13,6 @@ class BettingTasks:
         self.scraper = LivesportScraper()
         self.rules_engine = BettingRulesEngine()
         self.storage = FootballDataStorage()
-        self.bot = get_bot()
 
     async def daily_scheduled_analysis_task(self, ctx) -> str:
         """Daily task to analyze scheduled matches and find betting opportunities"""
@@ -31,7 +30,7 @@ class BettingTasks:
                     saved_opportunities.append(opp)
 
                 # Send notifications to users
-                # await self.bot.send_daily_summary(saved_opportunities)
+                await send_daily_summary(saved_opportunities)
 
                 logger.info(
                     f'Daily scheduled analysis completed: {len(opportunities)} opportunities found'
@@ -71,7 +70,7 @@ class BettingTasks:
 
                 # Send immediate notifications for live opportunities
                 for opp in saved_opportunities:
-                    await self.bot.send_betting_opportunity(opp)
+                    await send_betting_opportunity(opp)
 
                 logger.info(f'Live analysis completed: {len(opportunities)} opportunities found')
                 return f'Live analysis completed: {len(opportunities)} opportunities found'
