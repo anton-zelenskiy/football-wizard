@@ -120,12 +120,10 @@ async def get_live_matches_legacy():
 
 
 @router.get('/api/betting-opportunities')
-async def get_betting_opportunities(active: bool = True, limit: int = 50):
+async def get_betting_opportunities(limit: int = 50):
     """Get betting opportunities (legacy endpoint)"""
     try:
         query = BettingOpportunity.select()
-        if active:
-            query = query.where(BettingOpportunity.is_active)
 
         opportunities = query.order_by(BettingOpportunity.created_at.desc()).limit(limit)
 
@@ -138,7 +136,6 @@ async def get_betting_opportunities(active: bool = True, limit: int = 50):
                     'rule_triggered': opp.rule_triggered,
                     'confidence_score': opp.confidence_score,
                     'details': opp.get_details(),
-                    'is_active': opp.is_active,
                     'outcome': opp.outcome,
                     'created_at': opp.created_at.isoformat(),
                     'notified_at': opp.notified_at.isoformat() if opp.notified_at else None,
@@ -202,7 +199,6 @@ async def get_stats():
             'matches_count': total_matches,
             'live_matches_count': live_matches,
             'betting_opportunities_count': BettingOpportunity.select()
-            .where(BettingOpportunity.is_active)
             .count(),
             'telegram_users_count': TelegramUser.select().count(),
             'active_telegram_users_count': TelegramUser.select()

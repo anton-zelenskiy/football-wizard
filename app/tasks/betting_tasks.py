@@ -32,11 +32,11 @@ class BettingTasks:
                     logger.info(
                         f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found and notified'
                     )
-                    return (
-                        f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found'
-                    )
+                    return f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found'
                 else:
-                    logger.info('Daily scheduled analysis completed: no new opportunities (duplicates filtered)')
+                    logger.info(
+                        'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
+                    )
                     return 'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
             else:
                 logger.info('Daily scheduled analysis completed: no opportunities found')
@@ -47,7 +47,7 @@ class BettingTasks:
             return f'Error in daily scheduled analysis: {str(e)}'
 
     async def live_matches_analysis_task(self, ctx) -> str:
-        """Task to analyze live matches for betting opportunities every 3 minutes"""
+        """Task to scrape live matches and analyze them for betting opportunities every 3 minutes"""
         try:
             logger.info('Starting live matches analysis')
 
@@ -89,22 +89,24 @@ class BettingTasks:
             try:
                 # Check if this opportunity already exists (by match_id)
                 existing_opportunity = self.storage._find_existing_opportunity(opp.match_id)
-                
+
                 if existing_opportunity:
                     duplicate_opportunities += 1
                     logger.debug(f'Duplicate opportunity skipped for match {opp.match_id}')
                     continue
-                
+
                 # Save new opportunity
                 self.storage.save_opportunity(opp)
                 saved_opportunities.append(opp)
                 new_opportunities += 1
-                
+
             except Exception as e:
                 logger.error(f'Error saving opportunity {opp.rule_name}: {e}')
                 continue
 
-        logger.info(f'Saved {new_opportunities} new opportunities, skipped {duplicate_opportunities} duplicates')
+        logger.info(
+            f'Saved {new_opportunities} new opportunities, skipped {duplicate_opportunities} duplicates'
+        )
         return saved_opportunities
 
     async def refresh_league_data_task(self, ctx) -> str:
@@ -130,7 +132,9 @@ class BettingTasks:
                         # Use context manager for each individual league to minimize memory usage
                         async with LivesportScraper() as scraper:
                             # Scrape and save league data iteratively
-                            league_stats = await self._process_single_league(scraper, country, league_name)
+                            league_stats = await self._process_single_league(
+                                scraper, country, league_name
+                            )
 
                         total_leagues += 1
                         total_standings += league_stats['standings_count']
@@ -161,7 +165,9 @@ class BettingTasks:
             logger.error(f'Error in league data refresh task: {e}')
             raise
 
-    async def _process_single_league(self, scraper: LivesportScraper, country: str, league_name: str) -> dict[str, int]:
+    async def _process_single_league(
+        self, scraper: LivesportScraper, country: str, league_name: str
+    ) -> dict[str, int]:
         """Process a single league: scrape and save all data iteratively"""
         stats = {'standings_count': 0, 'matches_count': 0, 'fixtures_count': 0}
 
@@ -203,29 +209,6 @@ class BettingTasks:
 
         return stats
 
-    async def refresh_live_matches_task(self, ctx) -> str:
-        """Refresh live matches data iteratively"""
-        logger.info('Starting live matches refresh task')
-
-        try:
-            # Use context manager for scraper to prevent memory leaks
-            async with LivesportScraper() as scraper:
-                # Scrape live matches from all sources
-                live_matches: list[CommonMatchData] = await scraper.scrape_live_matches()
-
-                if live_matches:
-                    # Save matches iteratively
-                    saved_count = await self._save_matches_iteratively(live_matches, 'live')
-                    logger.info(f'Saved {saved_count} live matches')
-                    return f'Updated {saved_count} live matches'
-                else:
-                    logger.info('No live matches found')
-                    return 'No live matches to update'
-
-        except Exception as e:
-            logger.error(f'Error in live matches refresh task: {e}')
-            raise
-
     async def _save_matches_iteratively(
         self, matches: list[CommonMatchData], match_type: str
     ) -> int:
@@ -246,26 +229,19 @@ class BettingTasks:
 
 
 # Task functions for arq
-async def daily_scheduled_analysis(ctx):
+async def daily_scheduled_analysis(ctx) -> None:
     """Daily scheduled analysis task for arq"""
     tasks = BettingTasks()
     return await tasks.daily_scheduled_analysis_task(ctx)
 
 
-async def live_matches_analysis(ctx):
-    """Live matches analysis task for arq"""
+async def live_matches_analysis(ctx) -> None:
+    """Live matches scraping and analysis task for arq"""
     tasks = BettingTasks()
     return await tasks.live_matches_analysis_task(ctx)
 
 
-async def refresh_league_data(ctx):
+async def refresh_league_data(ctx) -> None:
     """League data refresh task for arq"""
     tasks = BettingTasks()
     return await tasks.refresh_league_data_task(ctx)
-
-
-async def refresh_live_matches(ctx):
-    """Live matches refresh task for arq"""
-    logger.info('Starting live matches refresh task')
-    tasks = BettingTasks()
-    return await tasks.refresh_live_matches_task(ctx)

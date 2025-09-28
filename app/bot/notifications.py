@@ -173,3 +173,53 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
     message += "Use /settings to adjust your notification preferences."
 
     return message
+
+
+def format_opportunities_message(opportunities: list) -> str:
+    """Format betting opportunities message for display"""
+    if not opportunities:
+        return (
+            "📊 <b>Current Betting Opportunities</b>\n\n"
+            "❌ No active betting opportunities found at the moment.\n\n"
+            "The bot continuously analyzes matches and will notify you when new "
+            "opportunities are discovered."
+        )
+
+    message = (
+        f"📊 <b>Current Betting Opportunities</b>\n\n"
+        f"Found {len(opportunities)} active opportunities:\n\n"
+    )
+
+    for i, opp in enumerate(opportunities, 1):
+        confidence_emoji = (
+            "🟢" if opp.confidence_score >= 0.8 
+            else "🟡" if opp.confidence_score >= 0.6 
+            else "🔴"
+        )
+
+        # Get match information if available
+        match_info = ""
+        if opp.match:
+            match_info = f"⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}"
+            if opp.match.match_date:
+                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_info += f"\n📅 {match_date}"
+        else:
+            match_info = "⚽ Match details not available"
+
+        # Get details for team analyzed
+        details = opp.get_details()
+        team_analyzed = details.get('team_analyzed', 'Unknown')
+
+        message += (
+            f"{i}. {confidence_emoji} <b>{opp.rule_triggered}</b>\n"
+            f"   {match_info}\n"
+            f"   🎯 Team Analyzed: {team_analyzed}\n"
+            f"   📊 Confidence: {opp.confidence_score:.1%}\n"
+            f"   🏟️ Type: {opp.opportunity_type.replace('_', ' ').title()}\n"
+            f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+        )
+
+    message += "Use /settings to adjust your notification preferences."
+
+    return message

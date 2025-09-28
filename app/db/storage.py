@@ -374,12 +374,12 @@ class FootballDataStorage:
             if not match_id:
                 return None
                 
-            # Look for existing active opportunity for this match
+            # Look for existing opportunity for this match (no outcome yet)
             existing = (
                 BettingOpportunity.select()
                 .where(
                     BettingOpportunity.match == match_id,
-                    BettingOpportunity.is_active == True
+                    BettingOpportunity.outcome.is_null()
                 )
                 .first()
             )
@@ -433,4 +433,22 @@ class FootballDataStorage:
             return list(Match.select().where(Match.status == 'live'))
         except Exception as e:
             logger.error(f'Error getting live matches: {e}')
+            return []
+
+    def get_active_betting_opportunities(self) -> list[BettingOpportunity]:
+        """Get betting opportunities for upcoming matches only"""
+        try:
+            from datetime import datetime
+            
+            return list(
+                BettingOpportunity.select()
+                .join(Match, on=(BettingOpportunity.match == Match.id))
+                .where(
+                    (BettingOpportunity.outcome.is_null()) &  # No outcome yet (pending)
+                    (Match.match_date > datetime.now())  # Future matches only
+                )
+                .order_by(BettingOpportunity.confidence_score.desc())
+            )
+        except Exception as e:
+            logger.error(f'Error getting betting opportunities: {e}')
             return []

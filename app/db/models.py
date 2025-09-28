@@ -87,7 +87,6 @@ class BettingOpportunity(BaseModel):
     rule_triggered = CharField()  # Which betting rule was triggered
     confidence_score = FloatField(default=0.0)  # 0.0 to 1.0
     details = TextField()  # JSON string with additional details
-    is_active = BooleanField(default=True)
     outcome = CharField(null=True)  # win, lose, pending, cancelled
     created_at = DateTimeField(default=datetime.now)
     notified_at = DateTimeField(null=True)

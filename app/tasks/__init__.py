@@ -5,7 +5,6 @@ from .betting_tasks import (
     daily_scheduled_analysis,
     live_matches_analysis,
     refresh_league_data,
-    refresh_live_matches,
 )
 
 __all__ = [
@@ -14,5 +13,4 @@ __all__ = [
     'live_matches_analysis', 
     'data_sync',
     'refresh_league_data',
-    'refresh_live_matches',
 ] 
