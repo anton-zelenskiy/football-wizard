@@ -3,7 +3,14 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from playwright.async_api import Browser, Page, Playwright, TimeoutError, async_playwright
+from playwright.async_api import (
+    Browser,
+    ElementHandle,
+    Page,
+    Playwright,
+    TimeoutError,
+    async_playwright,
+)
 from pydantic import BaseModel, Field
 
 from .constants import LEAGUES_OF_INTEREST
@@ -26,6 +33,7 @@ class CommonMatchData(BaseModel):
     minute: int | None = None
     red_cards_home: int = 0
     red_cards_away: int = 0
+    season: int = 2025  # Default season
 
 
 class LivesportScraper:
@@ -43,9 +51,15 @@ class LivesportScraper:
             '--disable-gpu',
         ]
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            ),
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': (
+                'text/html,application/xhtml+xml,application/xml;q=0.9,'
+                'image/webp,*/*;q=0.8'
+            ),
         }
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
@@ -138,6 +152,10 @@ class LivesportScraper:
 
             if not await self._navigate_and_wait(page, url, '.event__match', 60000):
                 return []
+
+            # Parse season from the page
+            season = await self._parse_season_from_page(page)
+            logger.info(f'Using season: {season}')
 
             # Click LIVE tab
             try:
@@ -263,13 +281,15 @@ class LivesportScraper:
                             home_team=home,
                             away_team=away,
                             league=current_league,
-                            country=current_country,
+                            country=current_country.title(),  # Normalize country name
                             home_score=home_score,
                             away_score=away_score,
                             status='live',
+                            match_date=datetime.now(),  # Set current time for live matches
                             minute=minute,
                             red_cards_home=red_cards_home,
                             red_cards_away=red_cards_away,
+                            season=season,
                         )
 
                         results.append(match_data)
@@ -417,6 +437,10 @@ class LivesportScraper:
             if not await self._navigate_and_wait(page, url, 'a[href*="/game/soccer/"]', 60000):
                 return []
 
+            # Parse season from the page
+            season = await self._parse_season_from_page(page)
+            logger.info(f'Using season: {season}')
+
             # Use the correct selectors based on the HTML structure
             matches_data = []
             processed_matches = set()
@@ -534,17 +558,19 @@ class LivesportScraper:
                                 home_team=home_team,
                                 away_team=away_team,
                                 league=league_name,
-                                country=country,
+                                country=country.title(),  # Normalize country name
                                 home_score=home_score,
                                 away_score=away_score,
                                 status='finished',
                                 match_date=match_date,
                                 round_number=round_number,
+                                season=season,
                             )
 
                             matches_data.append(match_data)
                             logger.debug(
-                                f'Extracted match: {home_team} vs {away_team} ({home_score}:{away_score}) - {round_info}'
+                                f'Extracted match: {home_team} vs {away_team} '
+                                f'({home_score}:{away_score}) - {round_info}'
                             )
 
                         except Exception as e:
@@ -606,6 +632,34 @@ class LivesportScraper:
             return int(clean_text)
         except (ValueError, IndexError):
             return None
+
+    async def _parse_season_from_page(self, page: Page) -> int:
+        """Parse season from heading__info div (e.g., '2025/2026' -> 2025)"""
+        try:
+            # Look for the season info div
+            season_element = await page.query_selector('.heading__info')
+            if not season_element:
+                logger.debug('No season info found, using default season 2025')
+                return 2025
+
+            season_text = await season_element.inner_text()
+            if not season_text:
+                logger.debug('Empty season text, using default season 2025')
+                return 2025
+
+            # Extract first number before "/" from text like "2025/2026"
+            season_match = re.search(r'^(\d+)', season_text.strip())
+            if season_match:
+                season = int(season_match.group(1))
+                logger.debug(f'Parsed season: {season} from text: {season_text}')
+                return season
+            else:
+                logger.debug(f'Could not parse season from: {season_text}, using default 2025')
+                return 2025
+
+        except Exception as e:
+            logger.error(f'Error parsing season: {e}, using default 2025')
+            return 2025
 
     def _parse_match_date(self, date_text: str) -> datetime | None:
         """Parse match date from text like 'Aug 25\n12:00 AM'"""
@@ -698,11 +752,15 @@ class LivesportScraper:
                 logger.error(f'Failed to load fixtures page: {fixtures_url}')
                 return []
 
+            # Parse season from the page
+            season = await self._parse_season_from_page(page)
+            logger.info(f'Using season: {season}')
+
             # Handle cookie banner if present
             await self._handle_cookie_banner(page)
 
             # Extract the first scheduled match only
-            fixtures = await self._extract_fixtures(page, country, league_name)
+            fixtures = await self._extract_fixtures(page, country, league_name, season)
 
             return fixtures
 
@@ -711,12 +769,14 @@ class LivesportScraper:
             return []
 
     async def _extract_fixtures(
-        self, page, country: str, league_name: str
+        self, page: 'Page', country: str, league_name: str, season: int
     ) -> list[CommonMatchData]:
         """Extract fixture data from the page - find first scheduled round and scrape all its matches"""
         try:
             # Find all round elements with class "event__round--static"
-            round_elements = await page.query_selector_all('.event__round--static')
+            round_elements = await page.query_selector_all(
+                '.event__round--static'
+            )
 
             if not round_elements:
                 logger.warning('No scheduled rounds found on fixtures page')
@@ -736,7 +796,8 @@ class LivesportScraper:
                     round_text = f'Round {round_number}'
 
             # Find all match elements that belong to this round
-            # Get the parent container and iterate through its children to find matches after the first round
+            # Get the parent container and iterate through its children
+            # to find matches after the first round
             parent_container = await page.query_selector('.sportName.soccer')
             if not parent_container:
                 logger.warning('Parent container not found')
@@ -776,12 +837,13 @@ class LivesportScraper:
                 # If we're collecting matches and this looks like a match element
                 if collecting_matches and await self._is_match_element(element):
                     fixture = await self._extract_single_fixture(
-                        element, country, league_name, round_number
+                        element, country, league_name, round_number, season
                     )
                     if fixture:
                         fixtures.append(fixture)
                         logger.info(
-                            f'Extracted fixture: {fixture.home_team} vs {fixture.away_team} on {fixture.match_date}'
+                            f'Extracted fixture: {fixture.home_team} vs '
+                            f'{fixture.away_team} on {fixture.match_date}'
                         )
 
             logger.info(f'Total fixtures extracted for {round_text}: {len(fixtures)}')
@@ -791,7 +853,7 @@ class LivesportScraper:
             logger.error(f'Error extracting fixtures: {e}')
             return []
 
-    async def _is_match_element(self, element) -> bool:
+    async def _is_match_element(self, element: ElementHandle) -> bool:
         """Check if an element represents a match (has the correct class structure)"""
         try:
             # Check if element has the match class structure
@@ -812,8 +874,12 @@ class LivesportScraper:
 
             # Also check if it has time and team elements
             has_time = await element.query_selector('.event__time') is not None
-            has_home_team = await element.query_selector('.event__homeParticipant') is not None
-            has_away_team = await element.query_selector('.event__awayParticipant') is not None
+            has_home_team = (
+                await element.query_selector('.event__homeParticipant') is not None
+            )
+            has_away_team = (
+                await element.query_selector('.event__awayParticipant') is not None
+            )
 
             return has_time and has_home_team and has_away_team
 
@@ -822,7 +888,12 @@ class LivesportScraper:
             return False
 
     async def _extract_single_fixture(
-        self, element, country: str, league_name: str, round_number: int = None
+        self,
+        element: ElementHandle,
+        country: str,
+        league_name: str,
+        round_number: int = None,
+        season: int = 2025,
     ) -> CommonMatchData | None:
         """Extract a single fixture from a match element"""
         try:
@@ -897,12 +968,13 @@ class LivesportScraper:
                 home_team=home_team.strip(),
                 away_team=away_team.strip(),
                 league=league_name,  # Will be set by caller
-                country=country,  # Will be set by caller
+                country=country.title(),  # Normalize country name
                 home_score=None,
                 away_score=None,
                 status='scheduled',
                 match_date=match_datetime,
                 round_number=round_number,
+                season=season,
             )
 
             logger.debug(
@@ -975,37 +1047,6 @@ class LivesportScraper:
             logger.error(f'Error parsing fixture datetime "{date_text}": {e}')
             return None
 
-    async def scrape_all_monitored_leagues(self) -> list[dict[str, Any]]:
-        """Scrape all monitored leagues"""
-        all_data = []
-
-        for country, leagues in self.monitored_leagues.items():
-            for league in leagues:
-                try:
-                    logger.info(f'Scraping {country}: {league}')
-                    standings = await self.scrape_league_standings(country, league)
-                    matches: list[CommonMatchData] = await self.scrape_league_matches(
-                        country, league
-                    )
-                    fixtures: list[CommonMatchData] = await self.scrape_league_fixtures(
-                        country, league
-                    )
-
-                    league_data = {
-                        'league': league,
-                        'country': country,
-                        'standings': standings,
-                        'matches': matches,
-                        'fixtures': fixtures,
-                    }
-                    all_data.append(league_data)
-
-                except Exception as e:
-                    logger.error(f'Error scraping {country}: {league}: {e}')
-                    continue
-
-        return all_data
-
     def _create_common_match_data(
         self,
         home_team: str,
@@ -1020,13 +1061,14 @@ class LivesportScraper:
         red_cards_home: int = 0,
         red_cards_away: int = 0,
         round_number: int = None,
+        season: int = 2025,
     ) -> CommonMatchData:
         """Create a common match data structure for all match types"""
         return CommonMatchData(
             home_team=home_team,
             away_team=away_team,
             league=league,
-            country=country,
+            country=country.title() if country else country,  # Normalize country name
             home_score=home_score,
             away_score=away_score,
             status=status,
@@ -1035,4 +1077,5 @@ class LivesportScraper:
             minute=minute,
             red_cards_home=red_cards_home,
             red_cards_away=red_cards_away,
+            season=season,
         )

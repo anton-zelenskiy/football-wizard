@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -12,6 +12,15 @@ from app.scraper.livesport_scraper import CommonMatchData
 from .models import BettingOpportunity, League, Match, Team, db
 
 logger = structlog.get_logger()
+
+
+def normalize_country_name(country: str) -> str:
+    """Normalize country name to prevent duplicates from different case"""
+    if not country:
+        return country
+
+    # Convert to title case (first letter uppercase, rest lowercase)
+    return country.title()
 
 
 class FootballDataStorage:
@@ -31,7 +40,7 @@ class FootballDataStorage:
             if created:
                 logger.info(f'Created new league: {league.name}')
 
-    def update_match_status(self, match: Match, new_status: str, **kwargs) -> None:
+    def update_match_status(self, match: Match, new_status: str, **kwargs: Any) -> None:
         """Update match status and related fields, handling lifecycle transitions"""
         old_status = match.status
         match.status = new_status
@@ -69,42 +78,42 @@ class FootballDataStorage:
 
         match.save()
         logger.info(
-            f'Updated match status: {match.home_team.name} vs {match.away_team.name} {old_status} -> {new_status}'
+            f'Updated match status: {match.home_team.name} vs {match.away_team.name} '
+            f'{old_status} -> {new_status}'
         )
 
     def save_match(self, match_data: 'CommonMatchData') -> None:
         """Unified method to save any type of match (live, finished, scheduled)"""
         with self.db.atomic():
+            # Normalize country name to prevent duplicates
+            normalized_country = normalize_country_name(match_data.country)
+
             # Find or create league
             league, _ = League.get_or_create(
                 name=match_data.league,
-                country=match_data.country,
-                defaults={'country': match_data.country},
+                country=normalized_country,
+                defaults={'country': normalized_country},
             )
 
             # Find or create teams
             home_team, _ = Team.get_or_create(
-                name=match_data.home_team, league=league, country=match_data.country
+                name=match_data.home_team, league=league
             )
             away_team, _ = Team.get_or_create(
-                name=match_data.away_team, league=league, country=match_data.country
+                name=match_data.away_team, league=league
             )
 
-            # Determine season based on status or use default
-            season = 2025
-            if match_data.status == 'scheduled':
-                season = 2025  # Future fixtures
-
+            # Use season from match data (parsed from page)
+            season = match_data.season
             round_number = match_data.round_number
 
-            # Check if match already exists using unique constraint
+            # Check if match already exists using core identifying fields
             try:
                 existing_match = Match.get(
                     Match.league == league,
                     Match.home_team == home_team,
                     Match.away_team == away_team,
                     Match.season == season,
-                    Match.round == round_number,
                 )
 
                 # Update existing match
@@ -120,7 +129,7 @@ class FootballDataStorage:
 
             except Match.DoesNotExist:
                 # Create new match
-                match = Match.create(
+                Match.create(
                     league=league,
                     home_team=home_team,
                     away_team=away_team,
@@ -142,10 +151,15 @@ class FootballDataStorage:
         self, team_data: dict[str, Any], league_name: str, country: str
     ) -> None:
         """Save league standings/team statistics"""
+        # Normalize country name to prevent duplicates
+        normalized_country = normalize_country_name(country)
+
         try:
-            league = League.get((League.name == league_name) & (League.country == country))
+            league = League.get(
+                (League.name == league_name) & (League.country == normalized_country)
+            )
         except League.DoesNotExist:
-            logger.error(f'League not found: {country} - {league_name}')
+            logger.error(f'League not found: {normalized_country} - {league_name}')
             return
 
         with self.db.atomic():
@@ -156,8 +170,7 @@ class FootballDataStorage:
 
             team, created = Team.get_or_create(name=team_name, league=league)
 
-            # Update team statistics and ensure country is set
-            team.country = country  # Always set the country
+            # Update team statistics
             team.rank = team_data.get('rank')
             team.games_played = team_data.get('all', {}).get('played', 0)
             team.wins = team_data.get('all', {}).get('win', 0)
@@ -211,11 +224,13 @@ class FootballDataStorage:
             )
             match_list = list(matches)
             logger.debug(
-                f'Found {len(match_list)} recent matches for {team.name} (requested: {count})'
+                f'Found {len(match_list)} recent matches for {team.name} '
+                f'(requested: {count})'
             )
             if match_list:
                 logger.debug(
-                    f'Most recent match: {match_list[0].home_team.name} vs {match_list[0].away_team.name} on {match_list[0].match_date}'
+                    f'Most recent match: {match_list[0].home_team.name} vs '
+                    f'{match_list[0].away_team.name} on {match_list[0].match_date}'
                 )
             return match_list
         except Exception as e:
@@ -224,8 +239,13 @@ class FootballDataStorage:
 
     def get_league_teams(self, league_name: str, country: str) -> list[Team]:
         """Get all teams for a specific league"""
+        # Normalize country name to prevent duplicates
+        normalized_country = normalize_country_name(country)
+
         try:
-            league = League.get((League.name == league_name) & (League.country == country))
+            league = League.get(
+                (League.name == league_name) & (League.country == normalized_country)
+            )
             return (
                 Team.select()
                 .where(Team.league == league)
@@ -233,13 +253,18 @@ class FootballDataStorage:
                 .execute()
             )
         except League.DoesNotExist:
-            logger.error(f'League not found: {country} - {league_name}')
+            logger.error(f'League not found: {normalized_country} - {league_name}')
             return []
 
     def get_league_matches(self, league_name: str, country: str, limit: int = 50) -> list[Match]:
         """Get matches for a specific league"""
+        # Normalize country name to prevent duplicates
+        normalized_country = normalize_country_name(country)
+
         try:
-            league = League.get((League.name == league_name) & (League.country == country))
+            league = League.get(
+                (League.name == league_name) & (League.country == normalized_country)
+            )
             return (
                 Match.select()
                 .where(Match.league == league)
@@ -249,13 +274,18 @@ class FootballDataStorage:
                 .execute()
             )
         except League.DoesNotExist:
-            logger.error(f'League not found: {country} - {league_name}')
+            logger.error(f'League not found: {normalized_country} - {league_name}')
             return []
 
     def get_league_fixtures(self, league_name: str, country: str, limit: int = 10) -> list[Match]:
         """Get upcoming fixtures for a specific league"""
+        # Normalize country name to prevent duplicates
+        normalized_country = normalize_country_name(country)
+
         try:
-            league = League.get((League.name == league_name) & (League.country == country))
+            league = League.get(
+                (League.name == league_name) & (League.country == normalized_country)
+            )
             return (
                 Match.select()
                 .where(Match.league == league)
@@ -267,17 +297,14 @@ class FootballDataStorage:
                 .execute()
             )
         except League.DoesNotExist:
-            logger.error(f'League not found: {country} - {league_name}')
+            logger.error(f'League not found: {normalized_country} - {league_name}')
             return []
 
     def get_scheduled_matches(self, days_ahead: int = 7) -> list[Match]:
         """Get all scheduled matches for the next N days"""
-        cutoff_date = datetime.now() + timedelta(days=days_ahead)
         return (
             Match.select()
             .where(Match.status == 'scheduled')
-            # .where(Match.match_date > datetime.now())
-            # .where(Match.match_date <= cutoff_date)
             .order_by(Match.match_date.asc())
             .join(Team, on=(Match.home_team == Team.id) | (Match.away_team == Team.id))
             .execute()
@@ -320,7 +347,8 @@ class FootballDataStorage:
                 opportunity.save()
                 updated_count += 1
                 logger.info(
-                    f'Updated betting outcome: {opportunity.rule_triggered} -> {outcome} for match {match.home_team.name} vs {match.away_team.name}'
+                    f'Updated betting outcome: {opportunity.rule_triggered} -> {outcome} '
+                    f'for match {match.home_team.name} vs {match.away_team.name}'
                 )
 
         logger.info(f'Updated {updated_count} betting outcomes')
@@ -346,11 +374,9 @@ class FootballDataStorage:
 
         # Check for existing opportunity to prevent duplicates
         existing_opportunity = self._find_existing_opportunity(opportunity.match_id)
-        
+
         if existing_opportunity:
-            logger.debug(
-                f'Opportunity already exists for match {opportunity.match_id}'
-            )
+            logger.debug(f'Opportunity already exists for match {opportunity.match_id}')
             return existing_opportunity
 
         # Create new opportunity
@@ -362,9 +388,10 @@ class FootballDataStorage:
         )
         db_opportunity.set_details(details)
         db_opportunity.save()
-        
+
         logger.info(
-            f'Created new betting opportunity: {opportunity.rule_name} for match {match.id if match else "N/A"}'
+            f'Created new betting opportunity: {opportunity.rule_name} '
+            f'for match {match.id if match else "N/A"}'
         )
         return db_opportunity
 
@@ -373,19 +400,16 @@ class FootballDataStorage:
         try:
             if not match_id:
                 return None
-                
+
             # Look for existing opportunity for this match (no outcome yet)
             existing = (
                 BettingOpportunity.select()
-                .where(
-                    BettingOpportunity.match == match_id,
-                    BettingOpportunity.outcome.is_null()
-                )
+                .where(BettingOpportunity.match == match_id, BettingOpportunity.outcome.is_null())
                 .first()
             )
-            
+
             return existing
-            
+
         except Exception as e:
             logger.error(f'Error checking for existing opportunity: {e}')
             return None
@@ -439,13 +463,13 @@ class FootballDataStorage:
         """Get betting opportunities for upcoming matches only"""
         try:
             from datetime import datetime
-            
+
             return list(
                 BettingOpportunity.select()
                 .join(Match, on=(BettingOpportunity.match == Match.id))
                 .where(
-                    (BettingOpportunity.outcome.is_null()) &  # No outcome yet (pending)
-                    (Match.match_date > datetime.now())  # Future matches only
+                    (BettingOpportunity.outcome.is_null())  # No outcome yet (pending)
+                    & (Match.match_date > datetime.now())  # Future matches only
                 )
                 .order_by(BettingOpportunity.confidence_score.desc())
             )

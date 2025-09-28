@@ -43,7 +43,6 @@ class Team(BaseModel):
     id = AutoField()
     name = CharField()
     league = ForeignKeyField(League, backref='teams')
-    country = CharField(null=True)
     rank = IntegerField(null=True)
     games_played = IntegerField(default=0)
     wins = IntegerField(default=0)
@@ -54,6 +53,11 @@ class Team(BaseModel):
     points = IntegerField(default=0)
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        indexes = (
+            (('name', 'league'), True),  # Unique constraint on name + league
+        )
 
 
 class Match(BaseModel):
@@ -76,7 +80,7 @@ class Match(BaseModel):
     class Meta:
         indexes = (
             # Unique constraint to prevent duplicate matches
-            (('league', 'home_team', 'away_team', 'season', 'round'), True),
+            (('league', 'home_team', 'away_team', 'season'), True),
         )
 
 
@@ -91,13 +95,13 @@ class BettingOpportunity(BaseModel):
     created_at = DateTimeField(default=datetime.now)
     notified_at = DateTimeField(null=True)
 
-    def get_details(self):
+    def get_details(self) -> dict:
         """Parse and return details as dict"""
         if self.details:
             return json.loads(self.details)
         return {}
 
-    def set_details(self, details_dict) -> None:
+    def set_details(self, details_dict: dict) -> None:
         """Set details as JSON string"""
         self.details = json.dumps(details_dict)
 
