@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.bot_routes import router as bot_router
 from app.api.legacy_routes import router as legacy_router
+from app.api.mini_app_routes import router as mini_app_router
 from app.api.root import router as root_router
 from app.api.routes import router as api_router
 from app.bet_rules.rule_engine import BettingRulesEngine
@@ -63,3 +64,4 @@ app.include_router(api_router, prefix='/football')
 app.include_router(legacy_router, prefix='/football')
 app.include_router(root_router, prefix='/football')
 app.include_router(bot_router, prefix='/football/api/v1/bot')
+app.include_router(mini_app_router, prefix='/football/api/v1/mini-app')

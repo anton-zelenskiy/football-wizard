@@ -1,11 +1,18 @@
 import structlog
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    WebAppInfo,
+)
 
 from app.bot.notifications import format_opportunities_message
 from app.db.models import TelegramUser
 from app.db.storage import FootballDataStorage
+from app.settings import settings
 
 logger = structlog.get_logger()
 
@@ -55,12 +62,35 @@ async def start_command(message: Message) -> None:
     )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🎯 Betting Opportunities",
+            web_app=WebAppInfo(url=f"{settings.base_host}/football/api/v1/mini-app/")
+        )],
         [InlineKeyboardButton(text="📊 View Settings", callback_data="settings")],
         [InlineKeyboardButton(text="❓ Help", callback_data="help")]
     ])
 
     await message.answer(welcome_text, reply_markup=keyboard)
     logger.info(f"User {user_id} started the bot")
+
+
+@router.message(Command("bettings"))
+async def bettings_command(message: Message) -> None:
+    """Handle /bettings command - open Mini App"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🎯 Open Betting Opportunities",
+            web_app=WebAppInfo(url=f"{settings.base_host}/football/api/v1/mini-app/")
+        )]
+    ])
+
+    await message.answer(
+        "🎯 <b>Betting Opportunities</b>\n\n"
+        "Click the button below to open the interactive betting opportunities interface!",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+    logger.info(f"User {message.from_user.id} requested betting opportunities Mini App")
 
 
 @router.message(Command("help"))
@@ -73,7 +103,8 @@ async def help_command(message: Message) -> None:
         "/help - Show this help message\n"
         "/status - Check your subscription status\n"
         "/settings - Configure notification preferences\n"
-        "/opportunities - Show all available betting opportunities\n\n"
+        "/opportunities - Show all available betting opportunities\n"
+        "/bettings - Open interactive betting opportunities web app\n\n"
         "🔔 Notification Commands:\n"
         "/subscribe - Subscribe to all notifications\n"
         "/unsubscribe - Unsubscribe from all notifications\n"
