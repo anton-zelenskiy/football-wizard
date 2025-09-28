@@ -15,7 +15,6 @@ from app.api.routes import router as api_router
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.db.models import create_tables
 from app.db.storage import FootballDataStorage
-from app.scraper.livesport_scraper import LivesportScraper
 from app.settings import settings
 
 logger = structlog.get_logger()
@@ -32,7 +31,6 @@ async def lifespan(app: FastAPI) -> None:
     logger.info('Database tables created')
 
     # Initialize components
-    app.state.scraper = LivesportScraper()
     app.state.storage = FootballDataStorage()
     app.state.rules_engine = BettingRulesEngine()
 

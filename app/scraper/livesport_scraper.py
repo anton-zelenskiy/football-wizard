@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from playwright.async_api import Browser, Page, TimeoutError, async_playwright
+from playwright.async_api import Browser, Page, Playwright, TimeoutError, async_playwright
 from pydantic import BaseModel, Field
 
 from .constants import LEAGUES_OF_INTEREST
@@ -47,14 +47,45 @@ class LivesportScraper:
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         }
+        self._playwright: Playwright | None = None
+        self._browser: Browser | None = None
 
-    async def _setup_browser(self) -> Browser:
-        """Setup and return a browser instance with common configuration"""
-        playwright = await async_playwright().start()
-        return await playwright.chromium.launch(
+    async def __aenter__(self) -> 'LivesportScraper':
+        """Async context manager entry"""
+        logger.info('Starting LivesportScraper context manager')
+        self._playwright = await async_playwright().start()
+        self._browser = await self._playwright.chromium.launch(
             headless=True,
             args=self.browser_args,
         )
+        return self
+
+    async def __aexit__(
+        self, exc_type: type | None, exc_val: Exception | None, exc_tb: Any
+    ) -> None:
+        """Async context manager exit - cleanup resources"""
+        logger.info('Cleaning up LivesportScraper resources')
+        try:
+            if self._browser:
+                await self._browser.close()
+                self._browser = None
+        except Exception as e:
+            logger.error(f'Error closing browser: {e}')
+
+        try:
+            if self._playwright:
+                await self._playwright.stop()
+                self._playwright = None
+        except Exception as e:
+            logger.error(f'Error stopping playwright: {e}')
+
+        logger.info('LivesportScraper resources cleaned up')
+
+    async def _setup_browser(self) -> Browser:
+        """Setup and return a browser instance with common configuration"""
+        if self._browser is None:
+            raise RuntimeError('Browser not initialized. Use LivesportScraper as context manager.')
+        return self._browser
 
     async def _setup_page(self, browser: Browser) -> Page:
         """Setup and return a page instance with common configuration"""
@@ -100,169 +131,162 @@ class LivesportScraper:
         """Scrape live matches from livesport.com using iterative approach"""
         url = 'https://www.livesport.com/soccer/'
 
-        async with async_playwright() as p:
-            browser = await self._setup_browser()
+        browser = await self._setup_browser()
 
+        try:
+            page = await self._setup_page(browser)
+
+            if not await self._navigate_and_wait(page, url, '.event__match', 60000):
+                return []
+
+            # Click LIVE tab
             try:
-                page = await self._setup_page(browser)
-
-                if not await self._navigate_and_wait(page, url, '.event__match', 60000):
+                await page.wait_for_selector('text=LIVE', timeout=30000)
+                live_tab = page.get_by_text('LIVE', exact=True)
+            except TimeoutError:
+                logger.warning('LIVE tab not found, trying alternative selectors')
+                live_tab = await page.query_selector(
+                    'div.filters__text.filters__text--short:text("LIVE")'
+                )
+                if not live_tab:
+                    logger.error('Could not find LIVE tab with any selector')
                     return []
 
-                # Click LIVE tab
+            if live_tab:
+                await live_tab.click()
+                logger.info('Clicked LIVE tab')
+                await page.wait_for_timeout(5000)
+            else:
+                logger.warning('LIVE tab not found')
+
+            # Wait for live matches to appear
+            try:
+                await page.wait_for_selector('.event__match--live', timeout=2000)
+            except TimeoutError:
+                logger.warning('No live matches found or selector changed')
+                return []
+
+            # Get the main container that holds all leagues and matches
+            main_container = await page.query_selector('.sportName.soccer')
+            if not main_container:
+                logger.error('Main container not found')
+                return []
+
+            # Get all direct children of the main container
+            all_elements = await main_container.query_selector_all(':scope > *')
+            logger.info(f'Found {len(all_elements)} elements in main container')
+
+            results = []
+            current_league = None
+            current_country = None
+
+            # Process elements iteratively
+            for i, element in enumerate(all_elements):
                 try:
-                    await page.wait_for_selector('text=LIVE', timeout=30000)
-                    live_tab = page.get_by_text('LIVE', exact=True)
-                except TimeoutError:
-                    logger.warning('LIVE tab not found, trying alternative selectors')
-                    live_tab = await page.query_selector(
-                        'div.filters__text.filters__text--short:text("LIVE")'
-                    )
-                    if not live_tab:
-                        logger.error('Could not find LIVE tab with any selector')
-                        return []
-
-                if live_tab:
-                    await live_tab.click()
-                    logger.info('Clicked LIVE tab')
-                    await page.wait_for_timeout(5000)
-                else:
-                    logger.warning('LIVE tab not found')
-
-                # Wait for live matches to appear
-                try:
-                    await page.wait_for_selector('.event__match--live', timeout=2000)
-                except TimeoutError:
-                    logger.warning('No live matches found or selector changed')
-                    return []
-
-                # Get the main container that holds all leagues and matches
-                main_container = await page.query_selector('.sportName.soccer')
-                if not main_container:
-                    logger.error('Main container not found')
-                    return []
-
-                # Get all direct children of the main container
-                all_elements = await main_container.query_selector_all(':scope > *')
-                logger.info(f'Found {len(all_elements)} elements in main container')
-
-                results = []
-                current_league = None
-                current_country = None
-
-                # Process elements iteratively
-                for i, element in enumerate(all_elements):
-                    try:
-                        class_name = await element.get_attribute('class')
-                        if not class_name:
-                            continue
-
-                        # Check if this is a league header
-                        if 'headerLeague' in class_name:
-                            # Extract league information
-                            country_el = await element.query_selector(
-                                '.headerLeague__category-text'
-                            )
-                            league_el = await element.query_selector('.headerLeague__title-text')
-
-                            if country_el and league_el:
-                                country = await country_el.inner_text()
-                                league = await league_el.inner_text()
-
-                                # Check if this is a monitored league
-                                if self._is_monitored_league(league, country):
-                                    current_league = league
-                                    current_country = country
-                                    logger.debug(f'Found monitored league: {country} - {league}')
-                                else:
-                                    current_league = None
-                                    current_country = None
-                                    logger.debug(
-                                        f'Skipping non-monitored league: {country} - {league}'
-                                    )
-
-                        # Check if this is a live match
-                        elif 'event__match--live' in class_name:
-                            # Only process matches if we have a current monitored league
-                            if not current_league:
-                                logger.debug('Skipping match: no monitored league context')
-                                continue
-
-                            # Extract match data
-                            home_el = await element.query_selector(
-                                '.event__homeParticipant span[data-testid="wcl-scores-simple-text-01"]'
-                            )
-                            away_el = await element.query_selector(
-                                '.event__awayParticipant span[data-testid="wcl-scores-simple-text-01"]'
-                            )
-
-                            home = await home_el.inner_text() if home_el else ''
-                            away = await away_el.inner_text() if away_el else ''
-
-                            if not home or not away:
-                                logger.debug('Skipping match: missing team names')
-                                continue
-
-                            # Extract scores
-                            score_home_el = await element.query_selector(
-                                'span[data-testid="wcl-matchRowScore"][data-side="1"]'
-                            )
-                            score_away_el = await element.query_selector(
-                                'span[data-testid="wcl-matchRowScore"][data-side="2"]'
-                            )
-                            score_home = await score_home_el.inner_text() if score_home_el else ''
-                            score_away = await score_away_el.inner_text() if score_away_el else ''
-
-                            # Extract minute
-                            minute_el = await element.query_selector('.event__stage')
-                            minute_text = await minute_el.inner_text() if minute_el else ''
-                            minute = self._extract_minute(minute_text)
-
-                            # Extract red cards
-                            red_card_home = await element.query_selector(
-                                '.event__icon--redCard.event__icon--home'
-                            )
-                            red_card_away = await element.query_selector(
-                                '.event__icon--redCard.event__icon--away'
-                            )
-                            red_cards_home = 1 if red_card_home else 0
-                            red_cards_away = 1 if red_card_away else 0
-
-                            # Convert scores to integers
-                            home_score = int(score_home) if score_home.isdigit() else 0
-                            away_score = int(score_away) if score_away.isdigit() else 0
-
-                            # Create common match format
-                            match_data = self._create_common_match_data(
-                                home_team=home,
-                                away_team=away,
-                                league=current_league,
-                                country=current_country,
-                                home_score=home_score,
-                                away_score=away_score,
-                                status='live',
-                                minute=minute,
-                                red_cards_home=red_cards_home,
-                                red_cards_away=red_cards_away,
-                            )
-
-                            results.append(match_data)
-                            logger.info(
-                                f'Scraped match: {home} vs {away} ({current_country}: {current_league})'
-                            )
-
-                    except Exception as e:
-                        logger.error(f'Error processing element {i}', error=str(e))
+                    class_name = await element.get_attribute('class')
+                    if not class_name:
                         continue
 
-                logger.info(f'Scraped {len(results)} live matches')
-                return results
+                    # Check if this is a league header
+                    if 'headerLeague' in class_name:
+                        # Extract league information
+                        country_el = await element.query_selector('.headerLeague__category-text')
+                        league_el = await element.query_selector('.headerLeague__title-text')
 
-            except Exception as e:
-                logger.error(f'Unexpected error while scraping live matches: {e}')
-                return []
-            finally:
-                await browser.close()
+                        if country_el and league_el:
+                            country = await country_el.inner_text()
+                            league = await league_el.inner_text()
+
+                            # Check if this is a monitored league
+                            if self._is_monitored_league(league, country):
+                                current_league = league
+                                current_country = country
+                                logger.debug(f'Found monitored league: {country} - {league}')
+                            else:
+                                current_league = None
+                                current_country = None
+                                logger.debug(f'Skipping non-monitored league: {country} - {league}')
+
+                    # Check if this is a live match
+                    elif 'event__match--live' in class_name:
+                        # Only process matches if we have a current monitored league
+                        if not current_league:
+                            logger.debug('Skipping match: no monitored league context')
+                            continue
+
+                        # Extract match data
+                        home_el = await element.query_selector(
+                            '.event__homeParticipant span[data-testid="wcl-scores-simple-text-01"]'
+                        )
+                        away_el = await element.query_selector(
+                            '.event__awayParticipant span[data-testid="wcl-scores-simple-text-01"]'
+                        )
+
+                        home = await home_el.inner_text() if home_el else ''
+                        away = await away_el.inner_text() if away_el else ''
+
+                        if not home or not away:
+                            logger.debug('Skipping match: missing team names')
+                            continue
+
+                        # Extract scores
+                        score_home_el = await element.query_selector(
+                            'span[data-testid="wcl-matchRowScore"][data-side="1"]'
+                        )
+                        score_away_el = await element.query_selector(
+                            'span[data-testid="wcl-matchRowScore"][data-side="2"]'
+                        )
+                        score_home = await score_home_el.inner_text() if score_home_el else ''
+                        score_away = await score_away_el.inner_text() if score_away_el else ''
+
+                        # Extract minute
+                        minute_el = await element.query_selector('.event__stage')
+                        minute_text = await minute_el.inner_text() if minute_el else ''
+                        minute = self._extract_minute(minute_text)
+
+                        # Extract red cards
+                        red_card_home = await element.query_selector(
+                            '.event__icon--redCard.event__icon--home'
+                        )
+                        red_card_away = await element.query_selector(
+                            '.event__icon--redCard.event__icon--away'
+                        )
+                        red_cards_home = 1 if red_card_home else 0
+                        red_cards_away = 1 if red_card_away else 0
+
+                        # Convert scores to integers
+                        home_score = int(score_home) if score_home.isdigit() else 0
+                        away_score = int(score_away) if score_away.isdigit() else 0
+
+                        # Create common match format
+                        match_data = self._create_common_match_data(
+                            home_team=home,
+                            away_team=away,
+                            league=current_league,
+                            country=current_country,
+                            home_score=home_score,
+                            away_score=away_score,
+                            status='live',
+                            minute=minute,
+                            red_cards_home=red_cards_home,
+                            red_cards_away=red_cards_away,
+                        )
+
+                        results.append(match_data)
+                        logger.info(
+                            f'Scraped match: {home} vs {away} ({current_country}: {current_league})'
+                        )
+
+                except Exception as e:
+                    logger.error(f'Error processing element {i}', error=str(e))
+                    continue
+
+            logger.info(f'Scraped {len(results)} live matches')
+            return results
+
+        except Exception as e:
+            logger.error(f'Unexpected error while scraping live matches: {e}')
+            return []
 
     async def scrape_league_standings(self, country: str, league_name: str) -> list[dict[str, Any]]:
         """Scrape league standings from livesport.com"""
@@ -273,114 +297,109 @@ class LivesportScraper:
 
         logger.info(f'Scraping league standings from: {url}')
 
-        async with async_playwright() as p:
-            browser = await self._setup_browser()
+        browser = await self._setup_browser()
 
-            try:
-                page = await self._setup_page(browser)
+        try:
+            page = await self._setup_page(browser)
 
-                if not await self._navigate_and_wait(page, url, 'a[href*="/team/"]', 60000):
-                    return []
+            if not await self._navigate_and_wait(page, url, 'a[href*="/team/"]', 60000):
+                return []
 
-                # Use optimized selectors to get table rows directly
-                table_rows = await page.query_selector_all('.ui-table__row')
-                logger.info(f'Found {len(table_rows)} table rows')
-                standings_data = []
+            # Use optimized selectors to get table rows directly
+            table_rows = await page.query_selector_all('.ui-table__row')
+            logger.info(f'Found {len(table_rows)} table rows')
+            standings_data = []
 
-                for row in table_rows:
-                    try:
-                        # Extract team name from the participant cell
-                        team_element = await row.query_selector('.table__cell--participant')
-                        if not team_element:
-                            continue
-
-                        team_name = await team_element.inner_text()
-                        team_name = team_name.strip()
-
-                        if not team_name or len(team_name) < 2:
-                            continue
-
-                        # Extract rank from the rank cell
-                        rank_element = await row.query_selector('.table__cell--rank')
-                        rank = None
-                        if rank_element:
-                            rank_text = await rank_element.inner_text()
-                            if rank_text and '.' in rank_text:
-                                rank = int(rank_text.replace('.', '').strip())
-
-                        # Extract stats using specific cell selectors
-                        played = wins = draws = losses = goals_for = goals_against = points = 0
-
-                        # Get all value cells in the row
-                        value_cells = await row.query_selector_all('.table__cell--value')
-
-                        if len(value_cells) >= 6:
-                            # GP (Games Played) - first value cell
-                            gp_text = await value_cells[0].inner_text()
-                            if gp_text.isdigit():
-                                played = int(gp_text)
-
-                            # W (Wins) - second value cell
-                            w_text = await value_cells[1].inner_text()
-                            if w_text.isdigit():
-                                wins = int(w_text)
-
-                            # T (Draws) - third value cell
-                            t_text = await value_cells[2].inner_text()
-                            if t_text.isdigit():
-                                draws = int(t_text)
-
-                            # L (Losses) - fourth value cell
-                            l_text = await value_cells[3].inner_text()
-                            if l_text.isdigit():
-                                losses = int(l_text)
-
-                            # G (Goals - format "17:3") - fifth value cell
-                            g_text = await value_cells[4].inner_text()
-                            if ':' in g_text:
-                                goals_parts = g_text.split(':')
-                                if len(goals_parts) == 2:
-                                    goals_for = (
-                                        int(goals_parts[0]) if goals_parts[0].isdigit() else 0
-                                    )
-                                    goals_against = (
-                                        int(goals_parts[1]) if goals_parts[1].isdigit() else 0
-                                    )
-
-                            # Pts (Points) - seventh value cell (skip GD)
-                            if len(value_cells) >= 7:
-                                pts_text = await value_cells[6].inner_text()
-                                if pts_text.isdigit():
-                                    points = int(pts_text)
-
-                        team_data = {
-                            'team': {'name': team_name},
-                            'rank': rank,
-                            'all': {
-                                'played': played,
-                                'win': wins,
-                                'draw': draws,
-                                'lose': losses,
-                                'goals': {'for': goals_for, 'against': goals_against},
-                            },
-                            'points': points,
-                        }
-
-                        standings_data.append(team_data)
-                        logger.debug(f'Extracted team: {team_name} (rank {rank})')
-
-                    except Exception as e:
-                        logger.error(f'Error parsing standings row: {e}')
+            for row in table_rows:
+                try:
+                    # Extract team name from the participant cell
+                    team_element = await row.query_selector('.table__cell--participant')
+                    if not team_element:
                         continue
 
-                logger.info(f'Scraped {len(standings_data)} teams from {league_name}')
-                return standings_data
+                    team_name = await team_element.inner_text()
+                    team_name = team_name.strip()
 
-            except Exception as e:
-                logger.error(f'Unexpected error while scraping standings: {e}')
-                return []
-            finally:
-                await browser.close()
+                    if not team_name or len(team_name) < 2:
+                        continue
+
+                    # Extract rank from the rank cell
+                    rank_element = await row.query_selector('.table__cell--rank')
+                    rank = None
+                    if rank_element:
+                        rank_text = await rank_element.inner_text()
+                        if rank_text and '.' in rank_text:
+                            rank = int(rank_text.replace('.', '').strip())
+
+                    # Extract stats using specific cell selectors
+                    played = wins = draws = losses = goals_for = goals_against = points = 0
+
+                    # Get all value cells in the row
+                    value_cells = await row.query_selector_all('.table__cell--value')
+
+                    if len(value_cells) >= 6:
+                        # GP (Games Played) - first value cell
+                        gp_text = await value_cells[0].inner_text()
+                        if gp_text.isdigit():
+                            played = int(gp_text)
+
+                        # W (Wins) - second value cell
+                        w_text = await value_cells[1].inner_text()
+                        if w_text.isdigit():
+                            wins = int(w_text)
+
+                        # T (Draws) - third value cell
+                        t_text = await value_cells[2].inner_text()
+                        if t_text.isdigit():
+                            draws = int(t_text)
+
+                        # L (Losses) - fourth value cell
+                        l_text = await value_cells[3].inner_text()
+                        if l_text.isdigit():
+                            losses = int(l_text)
+
+                        # G (Goals - format "17:3") - fifth value cell
+                        g_text = await value_cells[4].inner_text()
+                        if ':' in g_text:
+                            goals_parts = g_text.split(':')
+                            if len(goals_parts) == 2:
+                                goals_for = int(goals_parts[0]) if goals_parts[0].isdigit() else 0
+                                goals_against = (
+                                    int(goals_parts[1]) if goals_parts[1].isdigit() else 0
+                                )
+
+                        # Pts (Points) - seventh value cell (skip GD)
+                        if len(value_cells) >= 7:
+                            pts_text = await value_cells[6].inner_text()
+                            if pts_text.isdigit():
+                                points = int(pts_text)
+
+                    team_data = {
+                        'team': {'name': team_name},
+                        'rank': rank,
+                        'all': {
+                            'played': played,
+                            'win': wins,
+                            'draw': draws,
+                            'lose': losses,
+                            'goals': {'for': goals_for, 'against': goals_against},
+                        },
+                        'points': points,
+                    }
+
+                    standings_data.append(team_data)
+                    logger.debug(f'Extracted team: {team_name} (rank {rank})')
+
+                except Exception as e:
+                    logger.error(f'Error parsing standings row: {e}')
+                    continue
+
+            logger.info(f'Scraped {len(standings_data)} teams from {league_name}')
+            return standings_data
+
+        except Exception as e:
+            logger.error(f'Unexpected error while scraping standings: {e}')
+            return []
 
     async def scrape_league_matches(self, country: str, league_name: str) -> list[CommonMatchData]:
         """Scrape league matches from livesport.com"""
@@ -390,163 +409,158 @@ class LivesportScraper:
 
         logger.info(f'Scraping league matches from: {url}')
 
-        async with async_playwright() as p:
-            browser = await self._setup_browser()
+        browser = await self._setup_browser()
 
-            try:
-                page = await self._setup_page(browser)
+        try:
+            page = await self._setup_page(browser)
 
-                if not await self._navigate_and_wait(page, url, 'a[href*="/game/soccer/"]', 60000):
-                    return []
+            if not await self._navigate_and_wait(page, url, 'a[href*="/game/soccer/"]', 60000):
+                return []
 
-                # Use the correct selectors based on the HTML structure
-                matches_data = []
-                processed_matches = set()
+            # Use the correct selectors based on the HTML structure
+            matches_data = []
+            processed_matches = set()
 
-                # Find all round containers
-                round_containers = await page.query_selector_all(
-                    '.event__round.event__round--static'
-                )
-                logger.info(f'Found {len(round_containers)} round containers')
+            # Find all round containers
+            round_containers = await page.query_selector_all('.event__round.event__round--static')
+            logger.info(f'Found {len(round_containers)} round containers')
 
-                for round_container in round_containers:
-                    try:
-                        # Get round information
-                        round_text = await round_container.inner_text()
-                        round_info = round_text.strip() if round_text else None
+            for round_container in round_containers:
+                try:
+                    # Get round information
+                    round_text = await round_container.inner_text()
+                    round_info = round_text.strip() if round_text else None
 
-                        # Extract round number from round text
-                        round_number = None
-                        if round_info:
-                            match = re.search(r'(\d+)', round_info)
-                            if match:
-                                round_number = int(match.group(1))
-                                round_info = f'Round {round_number}'
+                    # Extract round number from round text
+                    round_number = None
+                    if round_info:
+                        match = re.search(r'(\d+)', round_info)
+                        if match:
+                            round_number = int(match.group(1))
+                            round_info = f'Round {round_number}'
 
-                        # Find matches that belong to this specific round
-                        # We need to iterate through siblings until we hit the next round
-                        current_element = await round_container.query_selector(
+                    # Find matches that belong to this specific round
+                    # We need to iterate through siblings until we hit the next round
+                    current_element = await round_container.query_selector(
+                        'xpath=following-sibling::*[1]'
+                    )
+                    match_containers = []
+
+                    while current_element:
+                        # Check if this is a match container
+                        class_name = await current_element.get_attribute('class')
+                        if (
+                            class_name
+                            and 'event__match' in class_name
+                            and 'event__match--withRowLink' in class_name
+                        ):
+                            match_containers.append(current_element)
+                        # Check if we hit the next round (stop here)
+                        elif class_name and 'event__round' in class_name:
+                            break
+
+                        # Move to next sibling
+                        current_element = await current_element.query_selector(
                             'xpath=following-sibling::*[1]'
                         )
-                        match_containers = []
 
-                        while current_element:
-                            # Check if this is a match container
-                            class_name = await current_element.get_attribute('class')
-                            if (
-                                class_name
-                                and 'event__match' in class_name
-                                and 'event__match--withRowLink' in class_name
-                            ):
-                                match_containers.append(current_element)
-                            # Check if we hit the next round (stop here)
-                            elif class_name and 'event__round' in class_name:
-                                break
-
-                            # Move to next sibling
-                            current_element = await current_element.query_selector(
-                                'xpath=following-sibling::*[1]'
+                    for match_container in match_containers:
+                        try:
+                            # Extract home team
+                            home_participant = await match_container.query_selector(
+                                '.event__homeParticipant'
                             )
-
-                        for match_container in match_containers:
-                            try:
-                                # Extract home team
-                                home_participant = await match_container.query_selector(
-                                    '.event__homeParticipant'
-                                )
-                                if not home_participant:
-                                    continue
-
-                                home_team_element = await home_participant.query_selector(
-                                    'span, strong'
-                                )
-                                if not home_team_element:
-                                    continue
-                                home_team = await home_team_element.inner_text()
-
-                                # Extract away team
-                                away_participant = await match_container.query_selector(
-                                    '.event__awayParticipant'
-                                )
-                                if not away_participant:
-                                    continue
-
-                                away_team_element = await away_participant.query_selector(
-                                    'span, strong'
-                                )
-                                if not away_team_element:
-                                    continue
-                                away_team = await away_team_element.inner_text()
-
-                                # Skip if we already processed this match
-                                match_key = f'{home_team}_{away_team}'
-                                if match_key in processed_matches:
-                                    continue
-                                processed_matches.add(match_key)
-
-                                # Extract scores
-                                home_score_element = await match_container.query_selector(
-                                    '.event__score.event__score--home'
-                                )
-                                away_score_element = await match_container.query_selector(
-                                    '.event__score.event__score--away'
-                                )
-
-                                home_score = 0
-                                away_score = 0
-
-                                if home_score_element:
-                                    home_score_text = await home_score_element.inner_text()
-                                    if home_score_text and home_score_text.isdigit():
-                                        home_score = int(home_score_text)
-
-                                if away_score_element:
-                                    away_score_text = await away_score_element.inner_text()
-                                    if away_score_text and away_score_text.isdigit():
-                                        away_score = int(away_score_text)
-
-                                # Extract match date
-                                time_element = await match_container.query_selector('.event__time')
-                                match_date = None
-                                if time_element:
-                                    date_text = await time_element.inner_text()
-                                    if date_text:
-                                        match_date = self._parse_match_date(date_text)
-
-                                # Create common match format
-                                match_data = self._create_common_match_data(
-                                    home_team=home_team,
-                                    away_team=away_team,
-                                    league=league_name,
-                                    country=country,
-                                    home_score=home_score,
-                                    away_score=away_score,
-                                    status='finished',
-                                    match_date=match_date,
-                                    round_number=round_number,
-                                )
-
-                                matches_data.append(match_data)
-                                logger.debug(
-                                    f'Extracted match: {home_team} vs {away_team} ({home_score}:{away_score}) - {round_info}'
-                                )
-
-                            except Exception as e:
-                                logger.error(f'Error parsing individual match: {e}')
+                            if not home_participant:
                                 continue
 
-                    except Exception as e:
-                        logger.error(f'Error parsing round: {e}')
-                        continue
+                            home_team_element = await home_participant.query_selector(
+                                'span, strong'
+                            )
+                            if not home_team_element:
+                                continue
+                            home_team = await home_team_element.inner_text()
 
-                logger.info(f'Scraped {len(matches_data)} matches from {league_name}')
-                return matches_data
+                            # Extract away team
+                            away_participant = await match_container.query_selector(
+                                '.event__awayParticipant'
+                            )
+                            if not away_participant:
+                                continue
 
-            except Exception as e:
-                logger.error(f'Unexpected error while scraping matches: {e}')
-                return []
-            finally:
-                await browser.close()
+                            away_team_element = await away_participant.query_selector(
+                                'span, strong'
+                            )
+                            if not away_team_element:
+                                continue
+                            away_team = await away_team_element.inner_text()
+
+                            # Skip if we already processed this match
+                            match_key = f'{home_team}_{away_team}'
+                            if match_key in processed_matches:
+                                continue
+                            processed_matches.add(match_key)
+
+                            # Extract scores
+                            home_score_element = await match_container.query_selector(
+                                '.event__score.event__score--home'
+                            )
+                            away_score_element = await match_container.query_selector(
+                                '.event__score.event__score--away'
+                            )
+
+                            home_score = 0
+                            away_score = 0
+
+                            if home_score_element:
+                                home_score_text = await home_score_element.inner_text()
+                                if home_score_text and home_score_text.isdigit():
+                                    home_score = int(home_score_text)
+
+                            if away_score_element:
+                                away_score_text = await away_score_element.inner_text()
+                                if away_score_text and away_score_text.isdigit():
+                                    away_score = int(away_score_text)
+
+                            # Extract match date
+                            time_element = await match_container.query_selector('.event__time')
+                            match_date = None
+                            if time_element:
+                                date_text = await time_element.inner_text()
+                                if date_text:
+                                    match_date = self._parse_match_date(date_text)
+
+                            # Create common match format
+                            match_data = self._create_common_match_data(
+                                home_team=home_team,
+                                away_team=away_team,
+                                league=league_name,
+                                country=country,
+                                home_score=home_score,
+                                away_score=away_score,
+                                status='finished',
+                                match_date=match_date,
+                                round_number=round_number,
+                            )
+
+                            matches_data.append(match_data)
+                            logger.debug(
+                                f'Extracted match: {home_team} vs {away_team} ({home_score}:{away_score}) - {round_info}'
+                            )
+
+                        except Exception as e:
+                            logger.error(f'Error parsing individual match: {e}')
+                            continue
+
+                except Exception as e:
+                    logger.error(f'Error parsing round: {e}')
+                    continue
+
+            logger.info(f'Scraped {len(matches_data)} matches from {league_name}')
+            return matches_data
+
+        except Exception as e:
+            logger.error(f'Unexpected error while scraping matches: {e}')
+            return []
 
     def _is_monitored_league(self, league_name: str, country: str = None) -> bool:
         """Check if the league is in our monitored list"""
@@ -682,7 +696,6 @@ class LivesportScraper:
             )
             if not success:
                 logger.error(f'Failed to load fixtures page: {fixtures_url}')
-                await browser.close()
                 return []
 
             # Handle cookie banner if present
@@ -691,7 +704,6 @@ class LivesportScraper:
             # Extract the first scheduled match only
             fixtures = await self._extract_fixtures(page, country, league_name)
 
-            await browser.close()
             return fixtures
 
         except Exception as e:

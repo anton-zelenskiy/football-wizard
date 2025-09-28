@@ -55,7 +55,7 @@ class BettingRule(BaseModel):
     bet_type: BetType = Field(description='Expected bet type')
     base_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description='Base confidence level')
 
-    def calculate_confidence(self, team_analysis: TeamAnalysis) -> float:
+    def calculate_confidence(self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None) -> float:
         """Calculate confidence based on team analysis"""
         raise NotImplementedError('Subclasses must implement calculate_confidence')
 
@@ -100,12 +100,22 @@ class ConsecutiveLossesRule(BettingRule):
             **data,
         )
 
-    def calculate_confidence(self, team_analysis: TeamAnalysis) -> float:
+    def calculate_confidence(self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None) -> float:
         """Calculate confidence for consecutive losses rule"""
         if team_analysis.consecutive_losses < 3:
             return 0.0
 
-        return self._base_confidence_calculator(team_analysis)
+        confidence = self._base_confidence_calculator(team_analysis)
+        
+        # Add rank-based confidence if opponent analysis is available
+        if opponent_analysis and team_analysis.team.rank and opponent_analysis.team.rank:
+            rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
+            if rank_difference > 0:  # Team we're betting on has higher rank (lower number)
+                rank_bonus = 0.025 * rank_difference
+                confidence += rank_bonus
+                confidence = min(1.0, confidence)  # Cap at 1.0
+        
+        return confidence
 
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
         """Determine outcome for consecutive losses rule (draw_or_win)"""
@@ -148,7 +158,7 @@ class ConsecutiveDrawsRule(BettingRule):
             **data,
         )
 
-    def calculate_confidence(self, team_analysis: TeamAnalysis) -> float:
+    def calculate_confidence(self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None) -> float:
         """Calculate confidence for consecutive draws rule"""
         if team_analysis.consecutive_draws < 3:
             return 0.0
@@ -196,7 +206,7 @@ class Top5ConsecutiveLossesRule(BettingRule):
             **data,
         )
 
-    def calculate_confidence(self, team_analysis: TeamAnalysis) -> float:
+    def calculate_confidence(self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None) -> float:
         """Calculate confidence for top 5 consecutive losses rule"""
         if not team_analysis.is_top5_team or team_analysis.consecutive_losses < 2:
             return 0.0
@@ -244,7 +254,7 @@ class LiveMatchRedCardRule(BettingRule):
             **data,
         )
 
-    def calculate_confidence(self, team_analysis: TeamAnalysis) -> float:
+    def calculate_confidence(self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None) -> float:
         """Calculate confidence for live red card rule"""
         # This rule is only applied to live matches, not historical analysis
         return 0.0

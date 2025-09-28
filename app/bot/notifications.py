@@ -108,7 +108,9 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
         )
         bot = get_bot_instance()
 
-        summary_text = _format_daily_summary(opportunities)
+        # Sort opportunities by confidence (highest first)
+        sorted_opportunities = sorted(opportunities, key=lambda x: x.confidence, reverse=True)
+        summary_text = _format_daily_summary(sorted_opportunities)
 
         for user in users:
             try:

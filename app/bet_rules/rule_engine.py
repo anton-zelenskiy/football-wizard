@@ -108,8 +108,8 @@ class BettingRulesEngine:
         away_analysis: TeamAnalysis,
     ) -> Bet | None:
         """Check a specific rule for both teams and create one opportunity per match"""
-        home_confidence = rule.calculate_confidence(home_analysis)
-        away_confidence = rule.calculate_confidence(away_analysis)
+        home_confidence = rule.calculate_confidence(home_analysis, away_analysis)
+        away_confidence = rule.calculate_confidence(away_analysis, home_analysis)
 
         # If neither team fits the rule, no opportunity
         if home_confidence == 0 and away_confidence == 0:

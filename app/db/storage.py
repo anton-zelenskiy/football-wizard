@@ -326,7 +326,7 @@ class FootballDataStorage:
         logger.info(f'Updated {updated_count} betting outcomes')
 
     def save_opportunity(self, opportunity: 'Bet') -> BettingOpportunity:
-        """Save betting opportunity to database"""
+        """Save betting opportunity to database with duplicate prevention"""
         match = None
         if opportunity.match_id:
             try:
@@ -344,6 +344,16 @@ class FootballDataStorage:
         details['rule_type'] = opportunity.rule_type
         details['team_analyzed'] = opportunity.team_analyzed
 
+        # Check for existing opportunity to prevent duplicates
+        existing_opportunity = self._find_existing_opportunity(opportunity.match_id)
+        
+        if existing_opportunity:
+            logger.debug(
+                f'Opportunity already exists for match {opportunity.match_id}'
+            )
+            return existing_opportunity
+
+        # Create new opportunity
         db_opportunity = BettingOpportunity(
             match=match,
             opportunity_type=opportunity_type,
@@ -352,7 +362,40 @@ class FootballDataStorage:
         )
         db_opportunity.set_details(details)
         db_opportunity.save()
+        
+        logger.info(
+            f'Created new betting opportunity: {opportunity.rule_name} for match {match.id if match else "N/A"}'
+        )
         return db_opportunity
+
+    def _find_existing_opportunity(self, match_id: int | None) -> BettingOpportunity | None:
+        """Find existing betting opportunity by match_id to prevent duplicates"""
+        try:
+            if not match_id:
+                return None
+                
+            # Look for existing active opportunity for this match
+            existing = (
+                BettingOpportunity.select()
+                .where(
+                    BettingOpportunity.match == match_id,
+                    BettingOpportunity.is_active == True
+                )
+                .first()
+            )
+            
+            return existing
+            
+        except Exception as e:
+            logger.error(f'Error checking for existing opportunity: {e}')
+            return None
+
+    def _get_match_by_id(self, match_id: int) -> Match | None:
+        """Get match by ID, return None if not found"""
+        try:
+            return Match.get(Match.id == match_id)
+        except Match.DoesNotExist:
+            return None
 
     def _determine_betting_outcome(
         self, opportunity: BettingOpportunity, match: Match
