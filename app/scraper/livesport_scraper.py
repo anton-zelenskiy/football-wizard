@@ -262,12 +262,12 @@ class LivesportScraper:
                         minute_text = await minute_el.inner_text() if minute_el else ''
                         minute = self._extract_minute(minute_text)
 
-                        # Extract red cards
+                        # Extract red cards from SVG elements with data-testid="wcl-icon-incidents-red-card"
                         red_card_home = await element.query_selector(
-                            '.event__icon--redCard.event__icon--home'
+                            '.event__homeParticipant svg[data-testid="wcl-icon-incidents-red-card"]'
                         )
                         red_card_away = await element.query_selector(
-                            '.event__icon--redCard.event__icon--away'
+                            '.event__awayParticipant svg[data-testid="wcl-icon-incidents-red-card"]'
                         )
                         red_cards_home = 1 if red_card_home else 0
                         red_cards_away = 1 if red_card_away else 0
