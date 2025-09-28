@@ -3,9 +3,16 @@ Telegram Mini App API routes for Football Betting Analysis
 """
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from app.api.security import (
+    get_telegram_webapp_data,
+    check_rate_limit,
+    validate_request_origin,
+    get_client_ip,
+    TelegramWebAppData
+)
 from app.db.models import BettingOpportunity, Match
 from app.db.storage import FootballDataStorage
 
@@ -19,9 +26,23 @@ storage = FootballDataStorage()
 
 
 @router.get("/betting-opportunities")
-async def get_betting_opportunities():
-    """Get active betting opportunities for Mini App"""
+async def get_betting_opportunities(
+    request: Request,
+    webapp_data: TelegramWebAppData = Depends(get_telegram_webapp_data)
+):
+    """Get active betting opportunities for Mini App (authenticated)"""
     try:
+        # Security checks
+        validate_request_origin(request)
+        check_rate_limit(webapp_data.user_id)
+        
+        # Log access
+        client_ip = get_client_ip(request)
+        logger.info(
+            f"Mini App API access: user_id={webapp_data.user_id}, "
+            f"ip={client_ip}, username={webapp_data.username}"
+        )
+        
         opportunities = storage.get_active_betting_opportunities()
         
         result = []
@@ -78,6 +99,78 @@ async def get_betting_opportunities():
         
     except Exception as e:
         logger.error(f"Error getting betting opportunities: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/betting-opportunities-public")
+async def get_betting_opportunities_public(request: Request):
+    """Get active betting opportunities for Mini App (public fallback)"""
+    try:
+        # Basic rate limiting for public endpoint
+        from app.api.security import rate_limiter
+        client_ip = get_client_ip(request)
+        
+        # More restrictive rate limiting for public endpoint
+        if not rate_limiter.is_allowed(0, max_requests=10, window=3600):  # 10 requests per hour
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        
+        opportunities = storage.get_active_betting_opportunities()
+        
+        result = []
+        for opp in opportunities:
+            match = opp.match
+            details = opp.get_details()
+            
+            opportunity_data = {
+                "id": opp.id,
+                "rule_triggered": opp.rule_triggered,
+                "confidence_score": opp.confidence_score,
+                "outcome": opp.outcome,
+                "created_at": opp.created_at.isoformat(),
+                "notified_at": opp.notified_at.isoformat() if opp.notified_at else None,
+                "details": details,
+            }
+            
+            if match:
+                opportunity_data["match"] = {
+                    "id": match.id,
+                    "home_team": {
+                        "id": match.home_team.id,
+                        "name": match.home_team.name,
+                        "rank": match.home_team.rank,
+                    },
+                    "away_team": {
+                        "id": match.away_team.id,
+                        "name": match.away_team.name,
+                        "rank": match.away_team.rank,
+                    },
+                    "league": {
+                        "id": match.league.id,
+                        "name": match.league.name,
+                        "country": match.league.country,
+                    },
+                    "home_score": match.home_score,
+                    "away_score": match.away_score,
+                    "match_date": match.match_date.isoformat(),
+                    "status": match.status,
+                    "minute": match.minute,
+                    "red_cards_home": match.red_cards_home,
+                    "red_cards_away": match.red_cards_away,
+                }
+            else:
+                opportunity_data["match"] = None
+                
+            result.append(opportunity_data)
+        
+        return {
+            "success": True,
+            "data": result,
+            "count": len(result),
+            "note": "Public endpoint - limited data access"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting betting opportunities (public): {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -328,8 +421,48 @@ async def mini_app_index():
                 refreshBtn.disabled = true;
                 
                 try {
-                    const response = await fetch('/football/api/v1/mini-app/betting-opportunities');
-                    const data = await response.json();
+                    // Try authenticated endpoint first
+                    let response;
+                    let data;
+                    
+                    try {
+                        // Get Telegram WebApp init data for authentication
+                        const initData = tg.initData;
+                        if (!initData) {
+                            throw new Error('Telegram WebApp not initialized');
+                        }
+                        
+                        response = await fetch('/football/api/v1/mini-app/betting-opportunities', {
+                            headers: {
+                                'Authorization': `Bearer ${initData}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            if (response.status === 401) {
+                                throw new Error('Authentication failed. Trying public endpoint...');
+                            } else if (response.status === 429) {
+                                throw new Error('Rate limit exceeded. Please try again later.');
+                            } else {
+                                throw new Error(`Server error: ${response.status}`);
+                            }
+                        }
+                        
+                        data = await response.json();
+                        
+                    } catch (authError) {
+                        console.log('Authentication failed, trying public endpoint:', authError.message);
+                        
+                        // Fallback to public endpoint
+                        response = await fetch('/football/api/v1/mini-app/betting-opportunities-public');
+                        
+                        if (!response.ok) {
+                            throw new Error(`Public endpoint error: ${response.status}`);
+                        }
+                        
+                        data = await response.json();
+                    }
                     
                     loading.style.display = 'none';
                     

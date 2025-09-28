@@ -59,7 +59,7 @@ class WorkerSettings:
         # Live matches analysis every 3 minutes (includes scraping and analysis)
         cron(
             live_matches_analysis,
-            minute=list(range(0, 60, 3)),
+            minute=list(range(0, 60, 1)),
             unique=True,
             job_id='live_matches_analysis'
         ),

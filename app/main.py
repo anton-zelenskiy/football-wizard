@@ -8,6 +8,8 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.middleware import SecurityMiddleware, MiniAppSecurityMiddleware
+
 from app.api.bot_routes import router as bot_router
 from app.api.legacy_routes import router as legacy_router
 from app.api.mini_app_routes import router as mini_app_router
@@ -49,6 +51,10 @@ app = FastAPI(
     version='1.0.0',
     lifespan=lifespan,
 )
+
+# Add security middleware
+app.add_middleware(SecurityMiddleware, max_requests_per_minute=60)
+app.add_middleware(MiniAppSecurityMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
