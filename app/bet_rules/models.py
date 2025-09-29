@@ -361,5 +361,8 @@ class Bet(BaseModel):
     bet_type: BetType = Field(description='Recommended bet type')
     confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
     team_analyzed: str = Field(description='Team that was analyzed')
-    opportunity_type: str = Field(default='historical_analysis', description='Type of opportunity: historical_analysis or live_opportunity')
+    opportunity_type: str = Field(
+        default='historical_analysis', 
+        description='Type of opportunity: historical_analysis or live_opportunity'
+    )
     details: dict[str, Any] = Field(default_factory=dict, description='Additional details')

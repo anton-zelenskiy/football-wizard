@@ -262,9 +262,9 @@ def test_match_result_creation():
         away_score=1,
         home_team='Home Team',
         away_team='Away Team',
-        team_analyzed='Home Team'
+        team_analyzed='Home Team',
     )
-    
+
     assert match_result.home_score == 2
     assert match_result.away_score == 1
     assert match_result.home_team == 'Home Team'
@@ -276,57 +276,121 @@ def test_match_result_creation():
 def test_match_result_result_type():
     """Test MatchResult result_type property"""
     # Home win
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home')
+    match_result = MatchResult(
+        home_score=2, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home'
+    )
     assert match_result.result_type == 'home_win'
-    
+
     # Away win
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home', away_team='Away', team_analyzed='Away')
+    match_result = MatchResult(
+        home_score=1, away_score=2, home_team='Home', away_team='Away', team_analyzed='Away'
+    )
     assert match_result.result_type == 'away_win'
-    
+
     # Draw
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home')
+    match_result = MatchResult(
+        home_score=1, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home'
+    )
     assert match_result.result_type == 'draw'
-    
+
     # Incomplete (None scores)
-    match_result = MatchResult(home_score=None, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home')
+    match_result = MatchResult(
+        home_score=None, away_score=1, home_team='Home', away_team='Away', team_analyzed='Home'
+    )
     assert match_result.result_type == 'incomplete'
-    
-    match_result = MatchResult(home_score=1, away_score=None, home_team='Home', away_team='Away', team_analyzed='Home')
+
+    match_result = MatchResult(
+        home_score=1, away_score=None, home_team='Home', away_team='Away', team_analyzed='Home'
+    )
     assert match_result.result_type == 'incomplete'
 
 
 def test_consecutive_losses_rule_determine_outcome():
     """Test ConsecutiveLossesRule determine_outcome method"""
     rule = ConsecutiveLossesRule()
-    
+
     # Home team with consecutive losses - should win if home wins or draws
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
+
     # Away team with consecutive losses - should win if away wins or draws
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
+
     # Both teams fit rule - should win if draw
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
 
 
@@ -334,10 +398,10 @@ def test_rule_type_values():
     """Test that rule types are correctly set"""
     consecutive_losses_rule = ConsecutiveLossesRule()
     assert consecutive_losses_rule.rule_type == 'consecutive_losses'
-    
+
     consecutive_draws_rule = ConsecutiveDrawsRule()
     assert consecutive_draws_rule.rule_type == 'consecutive_draws'
-    
+
     top5_rule = Top5ConsecutiveLossesRule()
     assert top5_rule.rule_type == 'top5_consecutive_losses'
 
@@ -345,70 +409,183 @@ def test_rule_type_values():
 def test_consecutive_draws_rule_determine_outcome():
     """Test ConsecutiveDrawsRule determine_outcome method"""
     rule = ConsecutiveDrawsRule()
-    
-    # Home team with consecutive draws - should win if home wins
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    # Home team with consecutive draws - win_or_lose bet: win if home wins OR loses (not draw)
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    # Draw should be LOSE for win_or_lose bet
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
-    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    # Away team with consecutive draws - should win if away wins
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+
+    # Home team loses should be WIN for win_or_lose bet (not a draw)
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
-    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
-    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    # Both teams fit rule - should win if either team wins
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    # Away team with consecutive draws - win_or_lose bet: win if away wins OR loses (not draw)
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    # Draw should be LOSE for win_or_lose bet
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
+    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
+
+    # Away team loses should be WIN for win_or_lose bet (not a draw)
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    # Both teams fit rule - should win if either team wins (not draw)
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
+    assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
+    assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
+
+    # Draw should be LOSE for win_or_lose bet
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
 
 
 def test_top5_consecutive_losses_rule_determine_outcome():
     """Test Top5ConsecutiveLossesRule determine_outcome method"""
     rule = Top5ConsecutiveLossesRule()
-    
+
     # Home team (top-5) with consecutive losses - should win if home wins or draws
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Home Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Home Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
+
     # Away team (top-5) with consecutive losses - should win if away wins or draws
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Away Team')
+
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Away Team',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
+
     # Both teams fit rule - should win if draw
-    match_result = MatchResult(home_score=1, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+    match_result = MatchResult(
+        home_score=1,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
-    
-    match_result = MatchResult(home_score=2, away_score=1, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    match_result = MatchResult(
+        home_score=2,
+        away_score=1,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
-    
-    match_result = MatchResult(home_score=1, away_score=2, home_team='Home Team', away_team='Away Team', team_analyzed='Both Teams')
+
+    match_result = MatchResult(
+        home_score=1,
+        away_score=2,
+        home_team='Home Team',
+        away_team='Away Team',
+        team_analyzed='Both Teams',
+    )
     assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
 
 
@@ -416,9 +593,9 @@ def test_rule_type_values():
     """Test that rule types are correctly set"""
     consecutive_losses_rule = ConsecutiveLossesRule()
     assert consecutive_losses_rule.rule_type == 'consecutive_losses'
-    
+
     consecutive_draws_rule = ConsecutiveDrawsRule()
     assert consecutive_draws_rule.rule_type == 'consecutive_draws'
-    
+
     top5_rule = Top5ConsecutiveLossesRule()
     assert top5_rule.rule_type == 'top5_consecutive_losses'

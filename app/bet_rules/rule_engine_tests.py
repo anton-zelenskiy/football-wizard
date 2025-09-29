@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
@@ -56,6 +57,7 @@ def create_mock_match():
     match.home_team = home_team
     match.away_team = away_team
     match.league = league
+    match.match_date = datetime(2025, 1, 1, 15, 0, 0)
 
     return match
 
