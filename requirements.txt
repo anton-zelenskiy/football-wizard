@@ -30,3 +30,7 @@ structlog
 # Testing
 pytest
 pytest-asyncio
+
+# Development tools
+pre-commit
+ruff
