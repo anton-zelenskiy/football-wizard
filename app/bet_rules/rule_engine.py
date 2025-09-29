@@ -169,6 +169,7 @@ class BettingRulesEngine:
             bet_type=rule.bet_type,
             confidence=final_confidence,
             team_analyzed=team_analyzed,
+            opportunity_type='historical_analysis',  # Scheduled matches are historical analysis
             details=details,
         )
 
@@ -265,6 +266,7 @@ class BettingRulesEngine:
                 bet_type=self.live_rule.bet_type,
                 confidence=confidence,
                 team_analyzed=team_analyzed,
+                opportunity_type='live_opportunity',  # Live matches are live opportunities
                 details=details,
             )
 

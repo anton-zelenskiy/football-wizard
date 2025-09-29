@@ -9,7 +9,10 @@ from aiogram.types import (
     WebAppInfo,
 )
 
-from app.bot.notifications import format_opportunities_message
+from app.bot.notifications import (
+    format_completed_opportunities_message,
+    format_opportunities_message,
+)
 from app.db.models import TelegramUser
 from app.db.storage import FootballDataStorage
 from app.settings import settings
@@ -104,6 +107,7 @@ async def help_command(message: Message) -> None:
         "/status - Check your subscription status\n"
         "/settings - Configure notification preferences\n"
         "/opportunities - Show all available betting opportunities\n"
+        "/completed - Show completed betting opportunities with statistics\n"
         "/bettings - Open interactive betting opportunities web app\n\n"
         "🔔 Notification Commands:\n"
         "/subscribe - Subscribe to all notifications\n"
@@ -344,6 +348,41 @@ async def opportunities_command(message: Message) -> None:
         logger.error(f"Error getting opportunities for user {user_id}: {e}")
         await message.answer(
             "❌ Error retrieving betting opportunities. Please try again later."
+        )
+
+
+@router.message(Command("completed"))
+async def completed_command(message: Message) -> None:
+    """Handle /completed command - show completed betting opportunities with statistics"""
+    user_id = message.from_user.id
+
+    try:
+        # Check if user is registered
+        TelegramUser.get(TelegramUser.telegram_id == user_id)
+
+        # Get completed betting opportunities and statistics
+        storage = FootballDataStorage()
+        opportunities = storage.get_completed_betting_opportunities(limit=20)
+        statistics = storage.get_betting_statistics()
+
+        # Format and send the message
+        completed_text = format_completed_opportunities_message(opportunities, statistics)
+        await message.answer(completed_text, parse_mode="HTML")
+
+        logger.info(
+            f"User {user_id} requested completed betting opportunities, "
+            f"found {len(opportunities)} opportunities, "
+            f"statistics: {statistics['wins']}W/{statistics['losses']}L ({statistics['win_rate']}%)"
+        )
+
+    except TelegramUser.DoesNotExist:
+        await message.answer(
+            "❌ You're not registered. Use /start to subscribe to notifications."
+        )
+    except Exception as e:
+        logger.error(f"Error getting completed opportunities for user {user_id}: {e}")
+        await message.answer(
+            "❌ Error retrieving completed betting opportunities. Please try again later."
         )
 
 

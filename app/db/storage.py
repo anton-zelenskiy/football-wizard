@@ -362,10 +362,8 @@ class FootballDataStorage:
             except Match.DoesNotExist:
                 logger.warning(f'Match {opportunity.match_id} not found for betting opportunity')
 
-        # Determine opportunity type based on rule name
-        opportunity_type = (
-            'live_opportunity' if 'Live' in opportunity.rule_name else 'historical_analysis'
-        )
+        # Use opportunity_type from Bet class
+        opportunity_type = opportunity.opportunity_type
 
         # Add rule_type to details for outcome determination
         details = opportunity.details.copy()
@@ -373,7 +371,7 @@ class FootballDataStorage:
         details['team_analyzed'] = opportunity.team_analyzed
 
         # Check for existing opportunity to prevent duplicates
-        existing_opportunity = self._find_existing_opportunity(opportunity.match_id)
+        existing_opportunity = self._find_existing_opportunity(opportunity)
 
         if existing_opportunity:
             logger.debug(f'Opportunity already exists for match {opportunity.match_id}')
@@ -395,16 +393,23 @@ class FootballDataStorage:
         )
         return db_opportunity
 
-    def _find_existing_opportunity(self, match_id: int | None) -> BettingOpportunity | None:
-        """Find existing betting opportunity by match_id to prevent duplicates"""
+    def _find_existing_opportunity(
+        self, opportunity: 'Bet'
+    ) -> BettingOpportunity | None:
+        """Find existing betting opportunity by match_id, rule, and opportunity_type"""
         try:
-            if not match_id:
+            if not opportunity.match_id:
                 return None
 
-            # Look for existing opportunity for this match (no outcome yet)
+            # Look for existing opportunity with same match, rule, and opportunity type
             existing = (
                 BettingOpportunity.select()
-                .where(BettingOpportunity.match == match_id, BettingOpportunity.outcome.is_null())
+                .where(
+                    BettingOpportunity.match == opportunity.match_id,
+                    BettingOpportunity.rule_triggered == opportunity.rule_name,
+                    BettingOpportunity.opportunity_type == opportunity.opportunity_type,
+                    BettingOpportunity.outcome.is_null()
+                )
                 .first()
             )
 
@@ -476,3 +481,48 @@ class FootballDataStorage:
         except Exception as e:
             logger.error(f'Error getting betting opportunities: {e}')
             return []
+
+    def get_completed_betting_opportunities(self, limit: int = 50) -> list[BettingOpportunity]:
+        """Get completed betting opportunities with outcomes"""
+        try:
+            from datetime import datetime
+
+            return list(
+                BettingOpportunity.select()
+                .join(Match, on=(BettingOpportunity.match == Match.id))
+                .where(
+                    (BettingOpportunity.outcome.is_null(False))  # Has outcome (win/lose)
+                    & (Match.match_date <= datetime.now())  # Past matches only
+                )
+                .order_by(Match.match_date.desc())
+                .limit(limit)
+            )
+        except Exception as e:
+            logger.error(f'Error getting completed betting opportunities: {e}')
+            return []
+
+    def get_betting_statistics(self) -> dict[str, int]:
+        """Get betting statistics: total, wins, losses"""
+        try:
+            completed_opportunities = (
+                BettingOpportunity.select()
+                .join(Match, on=(BettingOpportunity.match == Match.id))
+                .where(
+                    (BettingOpportunity.outcome.is_null(False))  # Has outcome
+                    & (Match.match_date <= datetime.now())  # Past matches only
+                )
+            )
+
+            total = completed_opportunities.count()
+            wins = completed_opportunities.where(BettingOpportunity.outcome == 'win').count()
+            losses = completed_opportunities.where(BettingOpportunity.outcome == 'lose').count()
+
+            return {
+                'total': total,
+                'wins': wins,
+                'losses': losses,
+                'win_rate': round((wins / total * 100) if total > 0 else 0, 1)
+            }
+        except Exception as e:
+            logger.error(f'Error getting betting statistics: {e}')
+            return {'total': 0, 'wins': 0, 'losses': 0, 'win_rate': 0.0}

@@ -223,3 +223,69 @@ def format_opportunities_message(opportunities: list) -> str:
     message += "Use /settings to adjust your notification preferences."
 
     return message
+
+
+def format_completed_opportunities_message(opportunities: list, statistics: dict) -> str:
+    """Format completed betting opportunities message with statistics"""
+    if not opportunities:
+        return (
+            "📊 <b>Completed Betting Opportunities</b>\n\n"
+            "❌ No completed betting opportunities found.\n\n"
+            "Completed opportunities will appear here once matches finish and outcomes are determined."
+        )
+
+    # Statistics header
+    stats_text = (
+        f"📊 <b>Betting Performance Statistics</b>\n\n"
+        f"🎯 Total Opportunities: {statistics['total']}\n"
+        f"✅ Wins: {statistics['wins']}\n"
+        f"❌ Losses: {statistics['losses']}\n"
+        f"📈 Win Rate: {statistics['win_rate']}%\n\n"
+    )
+
+    # Recent completed opportunities
+    message = (
+        f"{stats_text}"
+        f"📋 <b>Recent Completed Opportunities</b>\n\n"
+        f"Showing last {len(opportunities)} completed opportunities:\n\n"
+    )
+
+    for i, opp in enumerate(opportunities, 1):
+        # Outcome emoji
+        outcome_emoji = "✅" if opp.outcome == "win" else "❌" if opp.outcome == "lose" else "⏳"
+        
+        # Confidence emoji
+        confidence_emoji = (
+            "🟢" if opp.confidence_score >= 0.8 
+            else "🟡" if opp.confidence_score >= 0.6 
+            else "🔴"
+        )
+
+        # Get match information
+        match_info = ""
+        if opp.match:
+            match_info = f"⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}"
+            if opp.match.home_score is not None and opp.match.away_score is not None:
+                match_info += f" ({opp.match.home_score}-{opp.match.away_score})"
+            if opp.match.match_date:
+                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_info += f"\n📅 {match_date}"
+        else:
+            match_info = "⚽ Match details not available"
+
+        # Get details for team analyzed
+        details = opp.get_details()
+        team_analyzed = details.get('team_analyzed', 'Unknown')
+
+        message += (
+            f"{i}. {outcome_emoji} <b>{opp.rule_triggered}</b>\n"
+            f"   {match_info}\n"
+            f"   🎯 Team Analyzed: {team_analyzed}\n"
+            f"   {confidence_emoji} Confidence: {opp.confidence_score:.1%}\n"
+            f"   🏟️ Type: {opp.opportunity_type.replace('_', ' ').title()}\n"
+            f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+        )
+
+    message += "Use /opportunities to see active opportunities."
+
+    return message
