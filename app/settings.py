@@ -3,17 +3,18 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = 'sqlite:///./football.db'
+    database_url: str = "sqlite:///./football.db"
 
     # Redis
-    redis_url: str = 'redis://redis:6379/0'
+    redis_url: str = "redis://redis:6379/0"
 
     # Telegram Bot
-    telegram_bot_token: str = ''
-    base_host: str = 'http://localhost:8000'
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    base_host: str = "http://localhost:8000"
 
     # App Configuration
-    app_name: str = 'Football Betting Analysis'
+    app_name: str = "Football Betting Analysis"
     debug: bool = False
 
     # Task Configuration
@@ -29,8 +30,8 @@ class Settings(BaseSettings):
     live_draw_minute_threshold: int = 70
 
     class Config:
-        env_file = '.env'
-        env_prefix = ''
+        env_file = ".env"
+        env_prefix = ""
 
 
 settings = Settings()
