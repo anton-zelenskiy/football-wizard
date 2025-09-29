@@ -338,6 +338,7 @@ class FootballDataStorage:
 
         updated_count = 0
         for opportunity in pending_opportunities:
+            logger.info(f'Processing opportunity: {opportunity.rule_triggered}')
             match = opportunity.match
 
             # Determine outcome based on the betting rule

@@ -56,7 +56,6 @@ async def get_betting_opportunities(
                 "confidence_score": opp.confidence_score,
                 "outcome": opp.outcome,
                 "created_at": opp.created_at.isoformat(),
-                "notified_at": opp.notified_at.isoformat() if opp.notified_at else None,
                 "details": details,
             }
             
@@ -127,7 +126,6 @@ async def get_betting_opportunities_public(request: Request):
                 "confidence_score": opp.confidence_score,
                 "outcome": opp.outcome,
                 "created_at": opp.created_at.isoformat(),
-                "notified_at": opp.notified_at.isoformat() if opp.notified_at else None,
                 "details": details,
             }
             

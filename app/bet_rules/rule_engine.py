@@ -31,6 +31,7 @@ class BettingRulesEngine:
             ConsecutiveLossesRule(),
             ConsecutiveDrawsRule(),
             Top5ConsecutiveLossesRule(),
+            LiveMatchRedCardRule(),
         ]
         self.live_rule = LiveMatchRedCardRule()
 

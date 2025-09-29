@@ -138,7 +138,6 @@ async def get_betting_opportunities(limit: int = 50):
                     'details': opp.get_details(),
                     'outcome': opp.outcome,
                     'created_at': opp.created_at.isoformat(),
-                    'notified_at': opp.notified_at.isoformat() if opp.notified_at else None,
                 }
                 for opp in opportunities
             ],

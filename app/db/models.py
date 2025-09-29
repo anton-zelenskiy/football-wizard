@@ -93,7 +93,6 @@ class BettingOpportunity(BaseModel):
     details = TextField()  # JSON string with additional details
     outcome = CharField(null=True)  # win, lose, pending, cancelled
     created_at = DateTimeField(default=datetime.now)
-    notified_at = DateTimeField(null=True)
 
     def get_details(self) -> dict:
         """Parse and return details as dict"""
