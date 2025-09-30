@@ -167,9 +167,11 @@ class BettingRulesEngine:
             away_team=match.away_team.name,
             league=match.league.name,
             country=match.league.country,
-            match_date=match.match_date.strftime('%Y-%m-%d %H:%M')
-            if match.match_date
-            else None,
+            match_date=(
+                match.match_date.strftime('%Y-%m-%d %H:%M')
+                if match.match_date
+                else None
+            ),
             rule_name=rule.name,
             rule_type=rule.rule_type,
             bet_type=rule.bet_type,
