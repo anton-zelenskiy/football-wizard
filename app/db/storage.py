@@ -323,15 +323,6 @@ class FootballDataStorage:
         """Get all leagues"""
         return League.select().order_by(League.name).execute()
 
-    def get_match_lifecycle_summary(self) -> dict[str, int]:
-        """Get summary of matches by status for monitoring purposes"""
-        return {
-            "scheduled": Match.select().where(Match.status == "scheduled").count(),
-            "live": Match.select().where(Match.status == "live").count(),
-            "finished": Match.select().where(Match.status == "finished").count(),
-            "total": Match.select().count(),
-        }
-
     def update_betting_outcomes(self) -> None:
         """Update betting outcomes based on finished matches"""
         from .models import BettingOpportunity
@@ -429,13 +420,6 @@ class FootballDataStorage:
 
         except Exception as e:
             logger.error(f"Error checking for existing opportunity: {e}")
-            return None
-
-    def _get_match_by_id(self, match_id: int) -> Match | None:
-        """Get match by ID, return None if not found"""
-        try:
-            return Match.get(Match.id == match_id)
-        except Match.DoesNotExist:
             return None
 
     def _determine_betting_outcome(

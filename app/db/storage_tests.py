@@ -178,31 +178,6 @@ class TestDuplicatePrevention:
             # Should return the existing opportunity
             assert result == existing_opportunity
 
-    def test_get_match_by_id_success(self):
-        """Test _get_match_by_id when match exists"""
-        storage = FootballDataStorage()
-
-        with patch.object(Match, "get") as mock_get:
-            mock_match = MagicMock()
-            mock_get.return_value = mock_match
-
-            result = storage._get_match_by_id(1)
-
-            assert result == mock_match
-            mock_get.assert_called_once_with(Match.id == 1)
-
-    def test_get_match_by_id_not_found(self):
-        """Test _get_match_by_id when match doesn't exist"""
-        storage = FootballDataStorage()
-
-        with patch.object(Match, "get") as mock_get:
-            mock_get.side_effect = Match.DoesNotExist()
-
-            result = storage._get_match_by_id(1)
-
-            assert result is None
-            mock_get.assert_called_once_with(Match.id == 1)
-
 
 def test_save_match_creates_new_match():
     """Test that save_match creates a new match when none exists"""
