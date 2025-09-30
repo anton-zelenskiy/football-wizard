@@ -27,7 +27,7 @@ def test_live_match_red_card_rule_historical_analysis():
     """Test that live rule returns 0 for historical analysis"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analysis
+    # Create team analysis
     team_analysis = TeamAnalysis(
         team=Team(name='Test Team', rank=1),
         team_type='home',
@@ -45,7 +45,7 @@ def test_live_match_red_card_rule_no_red_card():
     """Test live rule with no red cards"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -80,7 +80,7 @@ def test_live_match_red_card_rule_not_draw():
     """Test live rule with red card but not a draw"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -115,7 +115,7 @@ def test_live_match_red_card_rule_home_team_red_card():
     """Test live rule with home team having red card"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -150,7 +150,7 @@ def test_live_match_red_card_rule_away_team_red_card():
     """Test live rule with away team having red card"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -185,7 +185,7 @@ def test_live_match_red_card_rule_weaker_team_advantage():
     """Test live rule with weaker team without red card getting advantage"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses - away team is weaker (higher rank)
+    # Create team analyses - away team is weaker (higher rank)
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -220,7 +220,7 @@ def test_live_match_red_card_rule_consecutive_no_goals_bonus():
     """Test live rule with consecutive no goals bonus"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -256,7 +256,7 @@ def test_live_match_red_card_rule_consecutive_draws_bonus():
     """Test live rule with consecutive draws bonus"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -292,7 +292,7 @@ def test_live_match_red_card_rule_consecutive_losses_bonus():
     """Test live rule with consecutive losses bonus"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -328,7 +328,7 @@ def test_live_match_red_card_rule_multiple_bonuses():
     """Test live rule with multiple bonuses"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -364,7 +364,7 @@ def test_live_match_red_card_rule_confidence_cap():
     """Test that confidence is capped at 1.0"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses with high bonuses
+    # Create team analyses with high bonuses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
@@ -400,7 +400,7 @@ def test_live_match_red_card_rule_both_teams_red_cards():
     """Test live rule with both teams having red cards"""
     rule = LiveMatchRedCardRule()
 
-    # Create mock team analyses
+    # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
         team_type='home',
