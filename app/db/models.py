@@ -19,7 +19,7 @@ import structlog
 logger = structlog.get_logger()
 
 # SQLite database
-db = SqliteDatabase("football.db")
+db = SqliteDatabase('football.db')
 
 
 class BaseModel(Model):
@@ -35,15 +35,13 @@ class League(BaseModel):
     updated_at = DateTimeField(default=datetime.now)
 
     class Meta:
-        indexes = (
-            (("name", "country"), True),  # Unique constraint on name + country
-        )
+        indexes = ((('name', 'country'), True),)
 
 
 class Team(BaseModel):
     id = AutoField()
     name = CharField()
-    league = ForeignKeyField(League, backref="teams")
+    league = ForeignKeyField(League, backref='teams')
     rank = IntegerField(null=True)
     games_played = IntegerField(default=0)
     wins = IntegerField(default=0)
@@ -56,22 +54,20 @@ class Team(BaseModel):
     updated_at = DateTimeField(default=datetime.now)
 
     class Meta:
-        indexes = (
-            (("name", "league"), True),  # Unique constraint on name + league
-        )
+        indexes = ((('name', 'league'), True),)
 
 
 class Match(BaseModel):
     id = AutoField()
-    league = ForeignKeyField(League, backref="matches")
-    home_team = ForeignKeyField(Team, backref="home_matches")
-    away_team = ForeignKeyField(Team, backref="away_matches")
+    league = ForeignKeyField(League, backref='matches')
+    home_team = ForeignKeyField(Team, backref='home_matches')
+    away_team = ForeignKeyField(Team, backref='away_matches')
     home_score = IntegerField(null=True)
     away_score = IntegerField(null=True)
     match_date = DateTimeField()
     season = IntegerField()
-    round = IntegerField(null=True)  # Round number (e.g., 1, 2, 3, etc.)
-    status = CharField(default="scheduled")  # scheduled, live, finished, cancelled
+    round = IntegerField(null=True)
+    status = CharField(default='scheduled')
     minute = IntegerField(null=True)  # Current minute for live matches
     red_cards_home = IntegerField(default=0)
     red_cards_away = IntegerField(default=0)
@@ -79,15 +75,12 @@ class Match(BaseModel):
     updated_at = DateTimeField(default=datetime.now)
 
     class Meta:
-        indexes = (
-            # Unique constraint to prevent duplicate matches
-            (("league", "home_team", "away_team", "season"), True),
-        )
+        indexes = ((('league', 'home_team', 'away_team', 'season'), True),)
 
 
 class BettingOpportunity(BaseModel):
     id = AutoField()
-    match = ForeignKeyField(Match, backref="betting_opportunities", null=True)
+    match = ForeignKeyField(Match, backref='betting_opportunities', null=True)
     opportunity_type = CharField()  # historical_analysis, live_opportunity
     rule_triggered = CharField()  # Which betting rule was triggered
     confidence_score = FloatField(default=0.0)  # 0.0 to 1.0
@@ -113,16 +106,16 @@ class TelegramUser(BaseModel):
     first_name = CharField(null=True)
     last_name = CharField(null=True)
     is_active = BooleanField(default=True)
-    daily_notifications = BooleanField(default=True)  # Daily betting opportunities
-    live_notifications = BooleanField(default=True)  # Live match opportunities
+    daily_notifications = BooleanField(default=True)
+    live_notifications = BooleanField(default=True)
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
 
 
 class NotificationLog(BaseModel):
     id = AutoField()
-    user = ForeignKeyField(TelegramUser, backref="notifications")
-    opportunity = ForeignKeyField(BettingOpportunity, backref="notifications")
+    user = ForeignKeyField(TelegramUser, backref='notifications')
+    opportunity = ForeignKeyField(BettingOpportunity, backref='notifications')
     message = TextField()
     sent_at = DateTimeField(default=datetime.now)
     success = BooleanField(default=True)
@@ -136,7 +129,7 @@ def create_tables() -> None:
         db.create_tables(
             [League, Team, Match, BettingOpportunity, TelegramUser, NotificationLog]
         )
-        logger.info("Database tables created")
+        logger.info('Database tables created')
 
 
 # Initialize database

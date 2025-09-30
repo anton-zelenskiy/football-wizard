@@ -32,6 +32,10 @@ indent-width = 4
 # Assume Python 3.12
 target-version = "py312"
 
+[tool.ruff.format]
+# Use single quotes consistently
+quote-style = "single"
+
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't combine the checks and the select option; instead,
@@ -60,7 +64,7 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Ignore specific rules globally
-ignore = ["B904"]  # Ignore raise ... from err requirement
+ignore = ["B904", "Q000", "Q003"]  # Ignore raise ... from err requirement and quote style conflicts
 
 [tool.ruff.lint.isort]
 # Configure import sorting

@@ -31,15 +31,15 @@ class FootballDataStorage:
     def save_league(self, league_data: dict[str, Any]) -> None:
         """Save a single league from API data"""
         with self.db.atomic():
-            league_info = league_data.get("league", {})
-            country_info = league_data.get("country", {})
+            league_info = league_data.get('league', {})
+            country_info = league_data.get('country', {})
 
             league, created = League.get_or_create(
-                name=league_info.get("name", ""),
-                country=country_info.get("name", ""),
+                name=league_info.get('name', ''),
+                country=country_info.get('name', ''),
             )
             if created:
-                logger.info(f"Created new league: {league.name}")
+                logger.info(f'Created new league: {league.name}')
 
     def update_match_status(self, match: Match, new_status: str, **kwargs: Any) -> None:
         """Update match status and related fields, handling lifecycle transitions"""
@@ -48,28 +48,28 @@ class FootballDataStorage:
         match.updated_at = datetime.now()
 
         # Handle status-specific field updates
-        if new_status == "live":
+        if new_status == 'live':
             # Set live-specific fields
-            match.minute = kwargs.get("minute")
-            match.red_cards_home = kwargs.get("red_cards_home", 0)
-            match.red_cards_away = kwargs.get("red_cards_away", 0)
-            if "home_score" in kwargs:
-                match.home_score = kwargs["home_score"]
-            if "away_score" in kwargs:
-                match.away_score = kwargs["away_score"]
+            match.minute = kwargs.get('minute')
+            match.red_cards_home = kwargs.get('red_cards_home', 0)
+            match.red_cards_away = kwargs.get('red_cards_away', 0)
+            if 'home_score' in kwargs:
+                match.home_score = kwargs['home_score']
+            if 'away_score' in kwargs:
+                match.away_score = kwargs['away_score']
 
-        elif new_status == "finished":
+        elif new_status == 'finished':
             # Clear live-specific fields when match finishes (set to defaults)
             match.minute = None
             match.red_cards_home = 0  # Set to default value, not None
             match.red_cards_away = 0  # Set to default value, not None
             # Ensure final scores are set
-            if "home_score" in kwargs:
-                match.home_score = kwargs["home_score"]
-            if "away_score" in kwargs:
-                match.away_score = kwargs["away_score"]
+            if 'home_score' in kwargs:
+                match.home_score = kwargs['home_score']
+            if 'away_score' in kwargs:
+                match.away_score = kwargs['away_score']
 
-        elif new_status == "scheduled":
+        elif new_status == 'scheduled':
             # Clear live/finished specific fields (set to defaults)
             match.minute = None
             match.red_cards_home = 0  # Set to default value, not None
@@ -79,11 +79,11 @@ class FootballDataStorage:
 
         match.save()
         logger.info(
-            f"Updated match status: {match.home_team.name} vs {match.away_team.name} "
-            f"{old_status} -> {new_status}"
+            f'Updated match status: {match.home_team.name} vs {match.away_team.name} '
+            f'{old_status} -> {new_status}'
         )
 
-    def save_match(self, match_data: "CommonMatchData") -> None:
+    def save_match(self, match_data: 'CommonMatchData') -> None:
         """Unified method to save any type of match (live, finished, scheduled)"""
         with self.db.atomic():
             # Normalize country name to prevent duplicates
@@ -93,7 +93,7 @@ class FootballDataStorage:
             league, _ = League.get_or_create(
                 name=match_data.league,
                 country=normalized_country,
-                defaults={"country": normalized_country},
+                defaults={'country': normalized_country},
             )
 
             # Find or create teams
@@ -141,7 +141,7 @@ class FootballDataStorage:
                     red_cards_away=match_data.red_cards_away,
                 )
                 logger.info(
-                    f"Created new match: {home_team.name} vs {away_team.name} ({match_data.status})"
+                    f'Created new match: {home_team.name} vs {away_team.name} ({match_data.status})'
                 )
 
     def save_team_standings(
@@ -156,46 +156,35 @@ class FootballDataStorage:
                 (League.name == league_name) & (League.country == normalized_country)
             )
         except League.DoesNotExist:
-            logger.error(f"League not found: {normalized_country} - {league_name}")
+            logger.error(f'League not found: {normalized_country} - {league_name}')
             return
 
         with self.db.atomic():
-            team_name = team_data.get("team", {}).get("name", "")
+            team_name = team_data.get('team', {}).get('name', '')
             if not team_name:
-                logger.error(f"Team not found: {team_data}")
+                logger.error(f'Team not found: {team_data}')
                 return
 
             team, created = Team.get_or_create(name=team_name, league=league)
 
             # Update team statistics
-            team.rank = team_data.get("rank")
-            team.games_played = team_data.get("all", {}).get("played", 0)
-            team.wins = team_data.get("all", {}).get("win", 0)
-            team.draws = team_data.get("all", {}).get("draw", 0)
-            team.losses = team_data.get("all", {}).get("lose", 0)
-            team.goals_scored = team_data.get("all", {}).get("goals", {}).get("for", 0)
+            team.rank = team_data.get('rank')
+            team.games_played = team_data.get('all', {}).get('played', 0)
+            team.wins = team_data.get('all', {}).get('win', 0)
+            team.draws = team_data.get('all', {}).get('draw', 0)
+            team.losses = team_data.get('all', {}).get('lose', 0)
+            team.goals_scored = team_data.get('all', {}).get('goals', {}).get('for', 0)
             team.goals_conceded = (
-                team_data.get("all", {}).get("goals", {}).get("against", 0)
+                team_data.get('all', {}).get('goals', {}).get('against', 0)
             )
-            team.points = team_data.get("points", 0)
+            team.points = team_data.get('points', 0)
             team.updated_at = datetime.now()
             team.save()
 
             if created:
-                logger.info(f"Created new team: {team.name}")
+                logger.info(f'Created new team: {team.name}')
             else:
-                logger.debug(f"Updated team statistics: {team.name}")
-
-    def get_recent_live_matches(self, minutes: int = 5) -> list[Match]:
-        """Get live matches from the last N minutes"""
-        cutoff_time = datetime.now().replace(second=0, microsecond=0)
-        return (
-            Match.select()
-            .where(Match.status == "live")
-            .where(Match.updated_at >= cutoff_time)
-            .order_by(Match.updated_at.desc())
-            .execute()
-        )
+                logger.debug(f'Updated team statistics: {team.name}')
 
     def get_team_recent_matches(self, team_name: str, limit: int = 5) -> list[Match]:
         """Get recent matches for a specific team"""
@@ -218,110 +207,35 @@ class FootballDataStorage:
                 Match.select()
                 .where(
                     ((Match.home_team == team) | (Match.away_team == team))
-                    & (Match.status == "finished")
+                    & (Match.status == 'finished')
                 )
                 .order_by(Match.match_date.desc())
                 .limit(count)
             )
             match_list = list(matches)
             logger.debug(
-                f"Found {len(match_list)} recent matches for {team.name} "
-                f"(requested: {count})"
+                f'Found {len(match_list)} recent matches for {team.name} '
+                f'(requested: {count})'
             )
             if match_list:
                 logger.debug(
-                    f"Most recent match: {match_list[0].home_team.name} vs "
-                    f"{match_list[0].away_team.name} on {match_list[0].match_date}"
+                    f'Most recent match: {match_list[0].home_team.name} vs '
+                    f'{match_list[0].away_team.name} on {match_list[0].match_date}'
                 )
             return match_list
         except Exception as e:
-            logger.error(f"Error getting recent matches for {team.name}: {e}")
-            return []
-
-    def get_league_teams(self, league_name: str, country: str) -> list[Team]:
-        """Get all teams for a specific league"""
-        # Normalize country name to prevent duplicates
-        normalized_country = normalize_country_name(country)
-
-        try:
-            league = League.get(
-                (League.name == league_name) & (League.country == normalized_country)
-            )
-            return (
-                Team.select()
-                .where(Team.league == league)
-                .order_by(Team.rank.asc(nulls="last"))
-                .execute()
-            )
-        except League.DoesNotExist:
-            logger.error(f"League not found: {normalized_country} - {league_name}")
-            return []
-
-    def get_league_matches(
-        self, league_name: str, country: str, limit: int = 50
-    ) -> list[Match]:
-        """Get matches for a specific league"""
-        # Normalize country name to prevent duplicates
-        normalized_country = normalize_country_name(country)
-
-        try:
-            league = League.get(
-                (League.name == league_name) & (League.country == normalized_country)
-            )
-            return (
-                Match.select()
-                .where(Match.league == league)
-                .order_by(Match.match_date.desc())
-                .limit(limit)
-                .join(
-                    Team, on=(Match.home_team == Team.id) | (Match.away_team == Team.id)
-                )
-                .execute()
-            )
-        except League.DoesNotExist:
-            logger.error(f"League not found: {normalized_country} - {league_name}")
-            return []
-
-    def get_league_fixtures(
-        self, league_name: str, country: str, limit: int = 10
-    ) -> list[Match]:
-        """Get upcoming fixtures for a specific league"""
-        # Normalize country name to prevent duplicates
-        normalized_country = normalize_country_name(country)
-
-        try:
-            league = League.get(
-                (League.name == league_name) & (League.country == normalized_country)
-            )
-            return (
-                Match.select()
-                .where(Match.league == league)
-                .where(Match.status == "scheduled")
-                .where(Match.match_date > datetime.now())
-                .order_by(Match.match_date.asc())
-                .limit(limit)
-                .join(
-                    Team, on=(Match.home_team == Team.id) | (Match.away_team == Team.id)
-                )
-                .execute()
-            )
-        except League.DoesNotExist:
-            logger.error(f"League not found: {normalized_country} - {league_name}")
+            logger.error(f'Error getting recent matches for {team.name}: {e}')
             return []
 
     def get_scheduled_matches(self, days_ahead: int = 7) -> list[Match]:
         """Get all scheduled matches for the next N days"""
         return (
             Match.select()
-            .where(Match.status == "scheduled")
+            .where(Match.status == 'scheduled')
             .order_by(Match.match_date.asc())
             .join(Team, on=(Match.home_team == Team.id) | (Match.away_team == Team.id))
             .execute()
         )
-
-    def get_all_leagues(self) -> list[League]:
-        """Get all leagues"""
-        return League.select().order_by(League.name).execute()
 
     def update_betting_outcomes(self) -> None:
         """Update betting outcomes based on finished matches"""
@@ -338,7 +252,7 @@ class FootballDataStorage:
 
         updated_count = 0
         for opportunity in pending_opportunities:
-            logger.info(f"Processing opportunity: {opportunity.rule_triggered}")
+            logger.info(f'Processing opportunity: {opportunity.rule_triggered}')
             match = opportunity.match
 
             # Determine outcome based on the betting rule
@@ -348,13 +262,13 @@ class FootballDataStorage:
                 opportunity.save()
                 updated_count += 1
                 logger.info(
-                    f"Updated betting outcome: {opportunity.rule_triggered} -> {outcome} "
-                    f"for match {match.home_team.name} vs {match.away_team.name}"
+                    f'Updated betting outcome: {opportunity.rule_triggered} -> {outcome} '
+                    f'for match {match.home_team.name} vs {match.away_team.name}'
                 )
 
-        logger.info(f"Updated {updated_count} betting outcomes")
+        logger.info(f'Updated {updated_count} betting outcomes')
 
-    def save_opportunity(self, opportunity: "Bet") -> BettingOpportunity:
+    def save_opportunity(self, opportunity: 'Bet') -> BettingOpportunity:
         """Save betting opportunity to database with duplicate prevention"""
         match = None
         if opportunity.match_id:
@@ -362,7 +276,7 @@ class FootballDataStorage:
                 match = Match.get(Match.id == opportunity.match_id)
             except Match.DoesNotExist:
                 logger.warning(
-                    f"Match {opportunity.match_id} not found for betting opportunity"
+                    f'Match {opportunity.match_id} not found for betting opportunity'
                 )
 
         # Use opportunity_type from Bet class
@@ -370,14 +284,14 @@ class FootballDataStorage:
 
         # Add rule_type to details for outcome determination
         details = opportunity.details.copy()
-        details["rule_type"] = opportunity.rule_type
-        details["team_analyzed"] = opportunity.team_analyzed
+        details['rule_type'] = opportunity.rule_type
+        details['team_analyzed'] = opportunity.team_analyzed
 
         # Check for existing opportunity to prevent duplicates
         existing_opportunity = self._find_existing_opportunity(opportunity)
 
         if existing_opportunity:
-            logger.debug(f"Opportunity already exists for match {opportunity.match_id}")
+            logger.debug(f'Opportunity already exists for match {opportunity.match_id}')
             return existing_opportunity
 
         # Create new opportunity
@@ -397,7 +311,7 @@ class FootballDataStorage:
         return db_opportunity
 
     def _find_existing_opportunity(
-        self, opportunity: "Bet"
+        self, opportunity: 'Bet'
     ) -> BettingOpportunity | None:
         """Find existing betting opportunity by match_id, rule, and opportunity_type"""
         try:
@@ -419,7 +333,7 @@ class FootballDataStorage:
             return existing
 
         except Exception as e:
-            logger.error(f"Error checking for existing opportunity: {e}")
+            logger.error(f'Error checking for existing opportunity: {e}')
             return None
 
     def _determine_betting_outcome(
@@ -430,8 +344,8 @@ class FootballDataStorage:
 
         # Get opportunity details
         details = opportunity.get_details()
-        team_analyzed = details.get("team_analyzed", "")
-        rule_type = details.get("rule_type", "")
+        team_analyzed = details.get('team_analyzed', '')
+        rule_type = details.get('rule_type', '')
 
         # Create MatchResult DTO
         match_result = MatchResult(
@@ -455,9 +369,9 @@ class FootballDataStorage:
     def get_live_matches(self) -> list[Match]:
         """Get all live matches"""
         try:
-            return list(Match.select().where(Match.status == "live"))
+            return list(Match.select().where(Match.status == 'live'))
         except Exception as e:
-            logger.error(f"Error getting live matches: {e}")
+            logger.error(f'Error getting live matches: {e}')
             return []
 
     def get_active_betting_opportunities(self) -> list[BettingOpportunity]:
@@ -475,7 +389,7 @@ class FootballDataStorage:
                 .order_by(BettingOpportunity.confidence_score.desc())
             )
         except Exception as e:
-            logger.error(f"Error getting betting opportunities: {e}")
+            logger.error(f'Error getting betting opportunities: {e}')
             return []
 
     def get_completed_betting_opportunities(
@@ -498,7 +412,7 @@ class FootballDataStorage:
                 .limit(limit)
             )
         except Exception as e:
-            logger.error(f"Error getting completed betting opportunities: {e}")
+            logger.error(f'Error getting completed betting opportunities: {e}')
             return []
 
     def get_betting_statistics(self) -> dict[str, int]:
@@ -515,18 +429,18 @@ class FootballDataStorage:
 
             total = completed_opportunities.count()
             wins = completed_opportunities.where(
-                BettingOpportunity.outcome == "win"
+                BettingOpportunity.outcome == 'win'
             ).count()
             losses = completed_opportunities.where(
-                BettingOpportunity.outcome == "lose"
+                BettingOpportunity.outcome == 'lose'
             ).count()
 
             return {
-                "total": total,
-                "wins": wins,
-                "losses": losses,
-                "win_rate": round((wins / total * 100) if total > 0 else 0, 1),
+                'total': total,
+                'wins': wins,
+                'losses': losses,
+                'win_rate': round((wins / total * 100) if total > 0 else 0, 1),
             }
         except Exception as e:
-            logger.error(f"Error getting betting statistics: {e}")
-            return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0}
+            logger.error(f'Error getting betting statistics: {e}')
+            return {'total': 0, 'wins': 0, 'losses': 0, 'win_rate': 0.0}
