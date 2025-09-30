@@ -67,28 +67,22 @@ class BettingRule(BaseModel):
         """Determine if the bet was won or lost based on match result"""
         raise NotImplementedError('Subclasses must implement determine_outcome')
 
-    @property
-    def _base_confidence_calculator(self):
-        """Base confidence calculation with common factors"""
+    def _calculate_base_confidence(self, team_analysis: TeamAnalysis) -> float:
+        confidence = self.base_confidence
 
-        def calculate(team_analysis: TeamAnalysis) -> float:
-            confidence = self.base_confidence
+        # Add confidence based on team rank
+        if team_analysis.is_top5_team:
+            confidence += 0.2
+        elif team_analysis.is_top_team:
+            confidence += 0.1
 
-            # Add confidence based on team rank
-            if team_analysis.is_top5_team:
-                confidence += 0.2
-            elif team_analysis.is_top_team:
-                confidence += 0.1
+        # Add confidence for no goals in last 2, 3, 4, or 5 matches
+        no_goals_streak = team_analysis.consecutive_no_goals
+        for min_streak in [2, 3, 4, 5]:
+            if no_goals_streak >= min_streak:
+                confidence += 0.05
 
-            # Add confidence for no goals in last 2, 3, 4, or 5 matches
-            no_goals_streak = team_analysis.consecutive_no_goals
-            for min_streak in [2, 3, 4, 5]:
-                if no_goals_streak >= min_streak:
-                    confidence += 0.05
-
-            return min(1.0, confidence)
-
-        return calculate
+        return min(1.0, confidence)
 
 
 class ConsecutiveLossesRule(BettingRule):
@@ -111,7 +105,7 @@ class ConsecutiveLossesRule(BettingRule):
         if team_analysis.consecutive_losses < 3:
             return 0.0
 
-        confidence = self._base_confidence_calculator(team_analysis)
+        confidence = self._calculate_base_confidence(team_analysis)
         # Add rank-based confidence if opponent analysis is available
         if (
             opponent_analysis
@@ -174,7 +168,7 @@ class ConsecutiveDrawsRule(BettingRule):
         if team_analysis.consecutive_draws < 3:
             return 0.0
 
-        return self._base_confidence_calculator(team_analysis)
+        return self._calculate_base_confidence(team_analysis)
 
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
         """Determine outcome for consecutive draws rule (win_or_lose)"""
@@ -224,7 +218,7 @@ class Top5ConsecutiveLossesRule(BettingRule):
         if not team_analysis.is_top5_team or team_analysis.consecutive_losses < 2:
             return 0.0
 
-        return self._base_confidence_calculator(team_analysis)
+        return self._calculate_base_confidence(team_analysis)
 
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
         """Determine outcome for top-5 consecutive losses rule (draw_or_win)"""
