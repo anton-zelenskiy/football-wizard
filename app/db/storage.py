@@ -1,18 +1,22 @@
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
 import structlog
 
-from app.bet_rules.models import (
-    Bet,
-    MatchResult,
-)
+from app.bet_rules.structures import Bet, MatchResult
+from app.db.models import BettingOpportunity, League, Match, Team, db
 from app.scraper.livesport_scraper import CommonMatchData
-
-from .models import BettingOpportunity, League, Match, Team, db
 
 
 logger = structlog.get_logger()
+
+
+class LeagueData(BaseModel):
+    """League data model for saving league information"""
+
+    league_name: str = Field(description='Name of the league')
+    country_name: str = Field(description='Name of the country')
 
 
 def normalize_country_name(country: str) -> str:
@@ -28,15 +32,15 @@ class FootballDataStorage:
     def __init__(self) -> None:
         self.db = db
 
-    def save_league(self, league_data: dict[str, Any]) -> None:
-        """Save a single league from API data"""
+    def save_league(self, league_data: LeagueData) -> None:
+        """Save a single league from LeagueData model"""
         with self.db.atomic():
-            league_info = league_data.get('league', {})
-            country_info = league_data.get('country', {})
+            # Normalize country name to prevent duplicates
+            normalized_country = normalize_country_name(league_data.country_name)
 
             league, created = League.get_or_create(
-                name=league_info.get('name', ''),
-                country=country_info.get('name', ''),
+                name=league_data.league_name,
+                country=normalized_country,
             )
             if created:
                 logger.info(f'Created new league: {league.name}')
@@ -227,8 +231,7 @@ class FootballDataStorage:
             logger.error(f'Error getting recent matches for {team.name}: {e}')
             return []
 
-    def get_scheduled_matches(self, days_ahead: int = 7) -> list[Match]:
-        """Get all scheduled matches for the next N days"""
+    def get_scheduled_matches(self) -> list[Match]:
         return (
             Match.select()
             .where(Match.status == 'scheduled')
@@ -239,8 +242,6 @@ class FootballDataStorage:
 
     def update_betting_outcomes(self) -> None:
         """Update betting outcomes based on finished matches"""
-        from .models import BettingOpportunity
-
         # Get all pending betting opportunities for finished matches
         pending_opportunities = (
             BettingOpportunity.select()

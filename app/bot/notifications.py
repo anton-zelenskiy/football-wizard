@@ -3,7 +3,7 @@ from typing import Any
 
 import structlog
 
-from app.bet_rules.models import Bet
+from app.bet_rules.structures import Bet
 from app.db.models import NotificationLog, TelegramUser
 
 
@@ -38,7 +38,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
         for user in users:
             try:
                 await bot.send_message(
-                    user.telegram_id, message_text, parse_mode="HTML"
+                    user.telegram_id, message_text, parse_mode='HTML'
                 )
 
                 # Log the notification
@@ -54,7 +54,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to send notification to user {user.telegram_id}",
+                    f'Failed to send notification to user {user.telegram_id}',
                     error=str(e),
                 )
 
@@ -67,20 +67,20 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     error_message=str(e),
                 )
 
-        logger.info(f"Sent live betting opportunity to {len(users)} users")
+        logger.info(f'Sent live betting opportunity to {len(users)} users')
 
     except Exception as e:
-        logger.error("Error sending betting opportunities", error=str(e))
+        logger.error('Error sending betting opportunities', error=str(e))
 
 
 def _format_opportunity_message(opportunity: Bet) -> str:
     """Format betting opportunity as Telegram message"""
     confidence_emoji = (
-        "🟢"
+        '🟢'
         if opportunity.confidence >= 0.8
-        else "🟡"
+        else '🟡'
         if opportunity.confidence >= 0.6
-        else "🔴"
+        else '🔴'
     )
 
     message = (
@@ -117,58 +117,58 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
         for user in users:
             try:
                 await bot.send_message(
-                    user.telegram_id, summary_text, parse_mode="HTML"
+                    user.telegram_id, summary_text, parse_mode='HTML'
                 )
                 await asyncio.sleep(0.1)
 
             except Exception as e:
                 logger.error(
-                    f"Failed to send daily summary to user {user.telegram_id}",
+                    f'Failed to send daily summary to user {user.telegram_id}',
                     error=str(e),
                 )
 
-        logger.info(f"Sent daily summary to {len(users)} users")
+        logger.info(f'Sent daily summary to {len(users)} users')
 
     except Exception as e:
-        logger.error("Error sending daily summary", error=str(e))
+        logger.error('Error sending daily summary', error=str(e))
 
 
 def _format_daily_summary(opportunities: list[Bet]) -> str:
     """Format daily summary message"""
     message = (
-        f"📊 <b>Daily Betting Opportunities Summary</b>\n\n"
-        f"Found {len(opportunities)} opportunities today:\n\n"
+        f'📊 <b>Daily Betting Opportunities Summary</b>\n\n'
+        f'Found {len(opportunities)} opportunities today:\n\n'
     )
 
     for i, opp in enumerate(opportunities, 1):  # Show all opportunities
         confidence_emoji = (
-            "🟢" if opp.confidence >= 0.8 else "🟡" if opp.confidence >= 0.6 else "🔴"
+            '🟢' if opp.confidence >= 0.8 else '🟡' if opp.confidence >= 0.6 else '🔴'
         )
 
         # Format bet type for display
-        bet_type_display = opp.bet_type.value.replace("_", " ").title()
+        bet_type_display = opp.bet_type.value.replace('_', ' ').title()
 
         # Determine which team to bet on based on team_analyzed
         if opp.team_analyzed == opp.home_team:
-            bet_team = f"🏠 {opp.home_team}"
+            bet_team = f'🏠 {opp.home_team}'
         elif opp.team_analyzed == opp.away_team:
-            bet_team = f"✈️ {opp.away_team}"
+            bet_team = f'✈️ {opp.away_team}'
         else:
             # Both teams or unclear - show both
-            bet_team = f"🏠 {opp.home_team} or ✈️ {opp.away_team}"
+            bet_team = f'🏠 {opp.home_team} or ✈️ {opp.away_team}'
 
         # Format match date if available
-        match_date_display = f"📅 {opp.match_date}" if opp.match_date else "📅 Date TBD"
+        match_date_display = f'📅 {opp.match_date}' if opp.match_date else '📅 Date TBD'
         message += (
-            f"{i}. {confidence_emoji} <b>{opp.rule_name}</b>\n"
-            f"   ⚽ {opp.home_team} vs {opp.away_team}\n"
-            f"   🎯 Bet: {bet_type_display} on {bet_team}\n"
-            f"   📊 Confidence: {opp.confidence:.1%}\n"
-            f"   🏟️ {opp.league} ({opp.country})\n"
-            f"   {match_date_display}\n\n"
+            f'{i}. {confidence_emoji} <b>{opp.rule_name}</b>\n'
+            f'   ⚽ {opp.home_team} vs {opp.away_team}\n'
+            f'   🎯 Bet: {bet_type_display} on {bet_team}\n'
+            f'   📊 Confidence: {opp.confidence:.1%}\n'
+            f'   🏟️ {opp.league} ({opp.country})\n'
+            f'   {match_date_display}\n\n'
         )
 
-    message += "Use /settings to adjust your notification preferences."
+    message += 'Use /settings to adjust your notification preferences.'
 
     return message
 
@@ -177,39 +177,39 @@ def format_opportunities_message(opportunities: list) -> str:
     """Format betting opportunities message for display"""
     if not opportunities:
         return (
-            "📊 <b>Current Betting Opportunities</b>\n\n"
-            "❌ No active betting opportunities found at the moment.\n\n"
-            "The bot continuously analyzes matches and will notify you when new "
-            "opportunities are discovered."
+            '📊 <b>Current Betting Opportunities</b>\n\n'
+            '❌ No active betting opportunities found at the moment.\n\n'
+            'The bot continuously analyzes matches and will notify you when new '
+            'opportunities are discovered.'
         )
 
     message = (
-        f"📊 <b>Current Betting Opportunities</b>\n\n"
-        f"Found {len(opportunities)} active opportunities:\n\n"
+        f'📊 <b>Current Betting Opportunities</b>\n\n'
+        f'Found {len(opportunities)} active opportunities:\n\n'
     )
 
     for i, opp in enumerate(opportunities, 1):
         confidence_emoji = (
-            "🟢"
+            '🟢'
             if opp.confidence_score >= 0.8
-            else "🟡"
+            else '🟡'
             if opp.confidence_score >= 0.6
-            else "🔴"
+            else '🔴'
         )
 
         # Get match information if available
-        match_info = ""
+        match_info = ''
         if opp.match:
-            match_info = f"⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}"
+            match_info = f'⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}'
             if opp.match.match_date:
-                match_date = opp.match.match_date.strftime("%Y-%m-%d %H:%M")
-                match_info += f"\n📅 {match_date}"
+                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_info += f'\n📅 {match_date}'
         else:
-            match_info = "⚽ Match details not available"
+            match_info = '⚽ Match details not available'
 
         # Get details for team analyzed
         details = opp.get_details()
-        team_analyzed = details.get("team_analyzed", "Unknown")
+        team_analyzed = details.get('team_analyzed', 'Unknown')
 
         message += (
             f"{i}. {confidence_emoji} <b>{opp.rule_triggered}</b>\n"
@@ -220,7 +220,7 @@ def format_opportunities_message(opportunities: list) -> str:
             f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
         )
 
-    message += "Use /settings to adjust your notification preferences."
+    message += 'Use /settings to adjust your notification preferences.'
 
     return message
 
@@ -231,9 +231,9 @@ def format_completed_opportunities_message(
     """Format completed betting opportunities message with statistics"""
     if not opportunities:
         return (
-            "📊 <b>Completed Betting Opportunities</b>\n\n"
-            "❌ No completed betting opportunities found.\n\n"
-            "Completed opportunities will appear here once matches finish and outcomes are determined."
+            '📊 <b>Completed Betting Opportunities</b>\n\n'
+            '❌ No completed betting opportunities found.\n\n'
+            'Completed opportunities will appear here once matches finish and outcomes are determined.'
         )
 
     # Statistics header
@@ -247,41 +247,41 @@ def format_completed_opportunities_message(
 
     # Recent completed opportunities
     message = (
-        f"{stats_text}"
-        f"📋 <b>Recent Completed Opportunities</b>\n\n"
-        f"Showing last {len(opportunities)} completed opportunities:\n\n"
+        f'{stats_text}'
+        f'📋 <b>Recent Completed Opportunities</b>\n\n'
+        f'Showing last {len(opportunities)} completed opportunities:\n\n'
     )
 
     for i, opp in enumerate(opportunities, 1):
         # Outcome emoji
         outcome_emoji = (
-            "✅" if opp.outcome == "win" else "❌" if opp.outcome == "lose" else "⏳"
+            '✅' if opp.outcome == 'win' else '❌' if opp.outcome == 'lose' else '⏳'
         )
 
         # Confidence emoji
         confidence_emoji = (
-            "🟢"
+            '🟢'
             if opp.confidence_score >= 0.8
-            else "🟡"
+            else '🟡'
             if opp.confidence_score >= 0.6
-            else "🔴"
+            else '🔴'
         )
 
         # Get match information
-        match_info = ""
+        match_info = ''
         if opp.match:
-            match_info = f"⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}"
+            match_info = f'⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}'
             if opp.match.home_score is not None and opp.match.away_score is not None:
-                match_info += f" ({opp.match.home_score}-{opp.match.away_score})"
+                match_info += f' ({opp.match.home_score}-{opp.match.away_score})'
             if opp.match.match_date:
-                match_date = opp.match.match_date.strftime("%Y-%m-%d %H:%M")
-                match_info += f"\n📅 {match_date}"
+                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_info += f'\n📅 {match_date}'
         else:
-            match_info = "⚽ Match details not available"
+            match_info = '⚽ Match details not available'
 
         # Get details for team analyzed
         details = opp.get_details()
-        team_analyzed = details.get("team_analyzed", "Unknown")
+        team_analyzed = details.get('team_analyzed', 'Unknown')
 
         message += (
             f"{i}. {outcome_emoji} <b>{opp.rule_triggered}</b>\n"
@@ -292,6 +292,6 @@ def format_completed_opportunities_message(
             f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
         )
 
-    message += "Use /opportunities to see active opportunities."
+    message += 'Use /opportunities to see active opportunities.'
 
     return message

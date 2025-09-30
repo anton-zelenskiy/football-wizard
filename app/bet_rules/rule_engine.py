@@ -1,10 +1,6 @@
 import structlog
 
-from app.db.models import Match
-from app.db.storage import FootballDataStorage
-from app.settings import settings
-
-from .models import (
+from app.bet_rules.structures import (
     Bet,
     BettingRule,
     ConsecutiveDrawsRule,
@@ -12,6 +8,10 @@ from .models import (
     LiveMatchRedCardRule,
     Top5ConsecutiveLossesRule,
 )
+from app.db.models import Match
+from app.db.storage import FootballDataStorage
+from app.settings import settings
+
 from .team_analysis import TeamAnalysis, TeamAnalysisService
 
 
@@ -49,12 +49,12 @@ class BettingRulesEngine:
         processed_matches = set()
 
         # Get all scheduled matches
-        scheduled_matches = self.storage.get_scheduled_matches(days_ahead=7)
+        scheduled_matches = self.storage.get_scheduled_matches()
 
         for match in scheduled_matches:
             try:
                 # Create a unique match identifier
-                match_id = f"{match.home_team.name}_{match.away_team.name}"
+                match_id = f'{match.home_team.name}_{match.away_team.name}'
 
                 # Skip if we've already processed this match
                 if match_id in processed_matches:
@@ -67,8 +67,8 @@ class BettingRulesEngine:
 
             except Exception as e:
                 logger.error(
-                    f"Error analyzing scheduled match {match.home_team.name} vs "
-                    f"{match.away_team.name}",
+                    f'Error analyzing scheduled match {match.home_team.name} vs '
+                    f'{match.away_team.name}',
                     error=str(e),
                 )
 
@@ -88,10 +88,10 @@ class BettingRulesEngine:
 
         # Analyze both teams
         home_analysis = self.team_analysis_service.analyze_team_performance(
-            match.home_team, "home", home_recent_matches
+            match.home_team, 'home', home_recent_matches
         )
         away_analysis = self.team_analysis_service.analyze_team_performance(
-            match.away_team, "away", away_recent_matches
+            match.away_team, 'away', away_recent_matches
         )
 
         # Check each rule for both teams and create one opportunity per rule
@@ -128,8 +128,8 @@ class BettingRulesEngine:
         if both_fit:
             # Both teams fit the rule - use average confidence but mark as uncertain
             final_confidence = (home_confidence + away_confidence) / 2
-            team_analyzed = f"{match.home_team.name} & {match.away_team.name}"
-            uncertainty_note = "Both teams fit rule - high uncertainty"
+            team_analyzed = f'{match.home_team.name} & {match.away_team.name}'
+            uncertainty_note = 'Both teams fit rule - high uncertainty'
         elif home_fits:
             final_confidence = home_confidence
             team_analyzed = match.home_team.name
@@ -141,25 +141,25 @@ class BettingRulesEngine:
 
         # Create opportunity details
         details = {
-            "home_team_fits": home_fits,
-            "away_team_fits": away_fits,
-            "both_teams_fit": both_fit,
-            "home_confidence": home_confidence,
-            "away_confidence": away_confidence,
-            "home_team_rank": home_analysis.team.rank,
-            "away_team_rank": away_analysis.team.rank,
-            "home_consecutive_losses": home_analysis.consecutive_losses,
-            "away_consecutive_losses": away_analysis.consecutive_losses,
-            "home_consecutive_draws": home_analysis.consecutive_draws,
-            "away_consecutive_draws": away_analysis.consecutive_draws,
-            "home_consecutive_no_goals": home_analysis.consecutive_no_goals,
-            "away_consecutive_no_goals": away_analysis.consecutive_no_goals,
-            "home_is_top_5": home_analysis.is_top5_team,
-            "away_is_top_5": away_analysis.is_top5_team,
+            'home_team_fits': home_fits,
+            'away_team_fits': away_fits,
+            'both_teams_fit': both_fit,
+            'home_confidence': home_confidence,
+            'away_confidence': away_confidence,
+            'home_team_rank': home_analysis.team.rank,
+            'away_team_rank': away_analysis.team.rank,
+            'home_consecutive_losses': home_analysis.consecutive_losses,
+            'away_consecutive_losses': away_analysis.consecutive_losses,
+            'home_consecutive_draws': home_analysis.consecutive_draws,
+            'away_consecutive_draws': away_analysis.consecutive_draws,
+            'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
+            'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
+            'home_is_top_5': home_analysis.is_top5_team,
+            'away_is_top_5': away_analysis.is_top5_team,
         }
 
         if uncertainty_note:
-            details["uncertainty_note"] = uncertainty_note
+            details['uncertainty_note'] = uncertainty_note
 
         return Bet(
             match_id=match.id,
@@ -167,7 +167,7 @@ class BettingRulesEngine:
             away_team=match.away_team.name,
             league=match.league.name,
             country=match.league.country,
-            match_date=match.match_date.strftime("%Y-%m-%d %H:%M")
+            match_date=match.match_date.strftime('%Y-%m-%d %H:%M')
             if match.match_date
             else None,
             rule_name=rule.name,
@@ -175,7 +175,7 @@ class BettingRulesEngine:
             bet_type=rule.bet_type,
             confidence=final_confidence,
             team_analyzed=team_analyzed,
-            opportunity_type="historical_analysis",  # Scheduled matches are historical analysis
+            opportunity_type='historical_analysis',  # Scheduled matches are historical analysis
             details=details,
         )
 
@@ -190,7 +190,7 @@ class BettingRulesEngine:
         for match in live_matches:
             try:
                 # Create a unique match identifier
-                match_id = f"{match.home_team.name}_{match.away_team.name}"
+                match_id = f'{match.home_team.name}_{match.away_team.name}'
 
                 # Skip if we've already processed this match
                 if match_id in processed_matches:
@@ -203,7 +203,7 @@ class BettingRulesEngine:
 
             except Exception as e:
                 logger.error(
-                    f"Error analyzing live match {match.home_team.name} vs {match.away_team.name}",
+                    f'Error analyzing live match {match.home_team.name} vs {match.away_team.name}',
                     error=str(e),
                 )
 
@@ -223,10 +223,10 @@ class BettingRulesEngine:
 
         # Analyze both teams
         home_analysis = self.team_analysis_service.analyze_team_performance(
-            match.home_team, "home", home_recent_matches
+            match.home_team, 'home', home_recent_matches
         )
         away_analysis = self.team_analysis_service.analyze_team_performance(
-            match.away_team, "away", away_recent_matches
+            match.away_team, 'away', away_recent_matches
         )
 
         # Check live match rule
@@ -242,19 +242,19 @@ class BettingRulesEngine:
         if confidence > 0:
             # Create opportunity details
             details = {
-                "live_match": True,
-                "red_cards_home": match.red_cards_home,
-                "red_cards_away": match.red_cards_away,
-                "current_score": f"{match.home_score or 0}-{match.away_score or 0}",
-                "minute": match.minute,
-                "home_team_rank": home_analysis.team.rank,
-                "away_team_rank": away_analysis.team.rank,
-                "home_consecutive_no_goals": home_analysis.consecutive_no_goals,
-                "away_consecutive_no_goals": away_analysis.consecutive_no_goals,
-                "home_consecutive_draws": home_analysis.consecutive_draws,
-                "away_consecutive_draws": away_analysis.consecutive_draws,
-                "home_consecutive_losses": home_analysis.consecutive_losses,
-                "away_consecutive_losses": away_analysis.consecutive_losses,
+                'live_match': True,
+                'red_cards_home': match.red_cards_home,
+                'red_cards_away': match.red_cards_away,
+                'current_score': f'{match.home_score or 0}-{match.away_score or 0}',
+                'minute': match.minute,
+                'home_team_rank': home_analysis.team.rank,
+                'away_team_rank': away_analysis.team.rank,
+                'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
+                'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
+                'home_consecutive_draws': home_analysis.consecutive_draws,
+                'away_consecutive_draws': away_analysis.consecutive_draws,
+                'home_consecutive_losses': home_analysis.consecutive_losses,
+                'away_consecutive_losses': away_analysis.consecutive_losses,
             }
 
             opportunity = Bet(
@@ -264,7 +264,7 @@ class BettingRulesEngine:
                 league=match.league.name,
                 country=match.league.country,
                 match_date=(
-                    match.match_date.strftime("%Y-%m-%d %H:%M")
+                    match.match_date.strftime('%Y-%m-%d %H:%M')
                     if match.match_date
                     else None
                 ),
@@ -273,7 +273,7 @@ class BettingRulesEngine:
                 bet_type=self.live_rule.bet_type,
                 confidence=confidence,
                 team_analyzed=team_analyzed,
-                opportunity_type="live_opportunity",  # Live matches are live opportunities
+                opportunity_type='live_opportunity',  # Live matches are live opportunities
                 details=details,
             )
 

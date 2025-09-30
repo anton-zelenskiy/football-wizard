@@ -1,8 +1,12 @@
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from app.bet_rules.models import BetType, ConsecutiveDrawsRule, ConsecutiveLossesRule
 from app.bet_rules.rule_engine import BettingRulesEngine
+from app.bet_rules.structures import (
+    BetType,
+    ConsecutiveDrawsRule,
+    ConsecutiveLossesRule,
+)
 from app.bet_rules.team_analysis import TeamAnalysis
 from app.db.models import League, Match, Team
 
@@ -17,7 +21,7 @@ def create_mock_team_analysis(
 ):
     """Helper function to create mock TeamAnalysis"""
     team = Mock(spec=Team)
-    team.name = "Test Team"
+    team.name = 'Test Team'
     team.rank = rank
 
     analysis = Mock(spec=TeamAnalysis)
@@ -39,16 +43,16 @@ def create_mock_team_analysis(
 def create_mock_match():
     """Helper function to create mock Match"""
     home_team = Mock(spec=Team)
-    home_team.name = "Home Team"
+    home_team.name = 'Home Team'
     home_team.rank = 3
 
     away_team = Mock(spec=Team)
-    away_team.name = "Away Team"
+    away_team.name = 'Away Team'
     away_team.rank = 10
 
     league = Mock(spec=League)
-    league.name = "Test League"
-    league.country = "Test Country"
+    league.name = 'Test League'
+    league.country = 'Test Country'
 
     match = Mock(spec=Match)
     match.id = 123
@@ -60,7 +64,7 @@ def create_mock_match():
     return match
 
 
-@patch("app.bet_rules.rule_engine.FootballDataStorage")
+@patch('app.bet_rules.rule_engine.FootballDataStorage')
 def test_analyze_scheduled_matches_no_matches(mock_storage):
     """Test analyze_scheduled_matches with no matches"""
     mock_storage.return_value.get_scheduled_matches.return_value = []
@@ -71,7 +75,7 @@ def test_analyze_scheduled_matches_no_matches(mock_storage):
     assert opportunities == []
 
 
-@patch("app.bet_rules.rule_engine.FootballDataStorage")
+@patch('app.bet_rules.rule_engine.FootballDataStorage')
 def test_analyze_scheduled_matches_single_team_fits_rule(mock_storage):
     """Test analyze_scheduled_matches with one team fitting a rule"""
     match = create_mock_match()
@@ -79,7 +83,7 @@ def test_analyze_scheduled_matches_single_team_fits_rule(mock_storage):
     mock_storage.return_value.get_team_recent_finished_matches.return_value = []
 
     # Mock team analysis service
-    with patch("app.bet_rules.rule_engine.TeamAnalysisService") as mock_service:
+    with patch('app.bet_rules.rule_engine.TeamAnalysisService') as mock_service:
         mock_analyzer = Mock()
         mock_service.return_value = mock_analyzer
 
@@ -99,17 +103,17 @@ def test_analyze_scheduled_matches_single_team_fits_rule(mock_storage):
         assert len(opportunities) == 1
         opportunity = opportunities[0]
         assert opportunity.match_id == 123
-        assert opportunity.home_team == "Home Team"
-        assert opportunity.away_team == "Away Team"
-        assert opportunity.rule_name == "Consecutive Losses Rule"
+        assert opportunity.home_team == 'Home Team'
+        assert opportunity.away_team == 'Away Team'
+        assert opportunity.rule_name == 'Consecutive Losses Rule'
         assert opportunity.bet_type == BetType.DRAW_OR_WIN
-        assert opportunity.team_analyzed == "Home Team"
-        assert opportunity.details["home_team_fits"] is True
-        assert opportunity.details["away_team_fits"] is False
-        assert opportunity.details["both_teams_fit"] is False
+        assert opportunity.team_analyzed == 'Home Team'
+        assert opportunity.details['home_team_fits'] is True
+        assert opportunity.details['away_team_fits'] is False
+        assert opportunity.details['both_teams_fit'] is False
 
 
-@patch("app.bet_rules.rule_engine.FootballDataStorage")
+@patch('app.bet_rules.rule_engine.FootballDataStorage')
 def test_analyze_scheduled_matches_both_teams_fit_same_rule(mock_storage):
     """Test analyze_scheduled_matches with both teams fitting the same rule"""
     match = create_mock_match()
@@ -117,7 +121,7 @@ def test_analyze_scheduled_matches_both_teams_fit_same_rule(mock_storage):
     mock_storage.return_value.get_team_recent_finished_matches.return_value = []
 
     # Mock team analysis service
-    with patch("app.bet_rules.rule_engine.TeamAnalysisService") as mock_service:
+    with patch('app.bet_rules.rule_engine.TeamAnalysisService') as mock_service:
         mock_analyzer = Mock()
         mock_service.return_value = mock_analyzer
 
@@ -136,18 +140,18 @@ def test_analyze_scheduled_matches_both_teams_fit_same_rule(mock_storage):
         assert len(opportunities) == 1
         opportunity = opportunities[0]
         assert opportunity.match_id == 123
-        assert opportunity.home_team == "Home Team"
-        assert opportunity.away_team == "Away Team"
-        assert opportunity.rule_name == "Consecutive Draws Rule"
+        assert opportunity.home_team == 'Home Team'
+        assert opportunity.away_team == 'Away Team'
+        assert opportunity.rule_name == 'Consecutive Draws Rule'
         assert opportunity.bet_type == BetType.WIN_OR_LOSE
-        assert opportunity.team_analyzed == "Home Team & Away Team"
-        assert opportunity.details["home_team_fits"] is True
-        assert opportunity.details["away_team_fits"] is True
-        assert opportunity.details["both_teams_fit"] is True
-        assert "uncertainty_note" in opportunity.details
+        assert opportunity.team_analyzed == 'Home Team & Away Team'
+        assert opportunity.details['home_team_fits'] is True
+        assert opportunity.details['away_team_fits'] is True
+        assert opportunity.details['both_teams_fit'] is True
+        assert 'uncertainty_note' in opportunity.details
         assert (
-            opportunity.details["uncertainty_note"]
-            == "Both teams fit rule - high uncertainty"
+            opportunity.details['uncertainty_note']
+            == 'Both teams fit rule - high uncertainty'
         )
 
 
@@ -183,11 +187,11 @@ def test_check_rule_for_match_single_team_fits():
     )
 
     assert opportunity is not None
-    assert opportunity.team_analyzed == "Home Team"
-    assert opportunity.details["home_team_fits"] is True
-    assert opportunity.details["away_team_fits"] is False
-    assert opportunity.details["both_teams_fit"] is False
-    assert "uncertainty_note" not in opportunity.details
+    assert opportunity.team_analyzed == 'Home Team'
+    assert opportunity.details['home_team_fits'] is True
+    assert opportunity.details['away_team_fits'] is False
+    assert opportunity.details['both_teams_fit'] is False
+    assert 'uncertainty_note' not in opportunity.details
 
 
 def test_check_rule_for_match_both_teams_fit():
@@ -205,12 +209,12 @@ def test_check_rule_for_match_both_teams_fit():
     )
 
     assert opportunity is not None
-    assert opportunity.team_analyzed == "Home Team & Away Team"
-    assert opportunity.details["home_team_fits"] is True
-    assert opportunity.details["away_team_fits"] is True
-    assert opportunity.details["both_teams_fit"] is True
-    assert "uncertainty_note" in opportunity.details
+    assert opportunity.team_analyzed == 'Home Team & Away Team'
+    assert opportunity.details['home_team_fits'] is True
+    assert opportunity.details['away_team_fits'] is True
+    assert opportunity.details['both_teams_fit'] is True
+    assert 'uncertainty_note' in opportunity.details
     assert (
-        opportunity.details["uncertainty_note"]
-        == "Both teams fit rule - high uncertainty"
+        opportunity.details['uncertainty_note']
+        == 'Both teams fit rule - high uncertainty'
     )
