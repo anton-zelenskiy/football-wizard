@@ -5,7 +5,15 @@ from pydantic import BaseModel, Field
 import structlog
 
 from app.bet_rules.structures import Bet, MatchResult
-from app.db.models import BettingOpportunity, League, Match, Team, db
+from app.db.models import (
+    BettingOpportunity,
+    League,
+    Match,
+    NotificationLog,
+    Team,
+    TelegramUser,
+    db,
+)
 from app.scraper.livesport_scraper import CommonMatchData
 
 
@@ -445,3 +453,165 @@ class FootballDataStorage:
         except Exception as e:
             logger.error(f'Error getting betting statistics: {e}')
             return {'total': 0, 'wins': 0, 'losses': 0, 'win_rate': 0.0}
+
+    # TelegramUser management methods
+    def get_or_create_telegram_user(
+        self,
+        telegram_id: int,
+        username: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+    ) -> tuple[TelegramUser, bool]:
+        """Get or create a Telegram user"""
+        try:
+            user, created = TelegramUser.get_or_create(
+                telegram_id=telegram_id,
+                defaults={
+                    'username': username,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'is_active': True,
+                },
+            )
+
+            if not created:
+                # Update user info if not newly created
+                user.username = username
+                user.first_name = first_name
+                user.last_name = last_name
+                user.is_active = True
+                user.save()
+
+            return user, created
+        except Exception as e:
+            logger.error(f'Error getting/creating Telegram user {telegram_id}: {e}')
+            raise
+
+    def get_telegram_user(self, telegram_id: int) -> TelegramUser:
+        """Get a Telegram user by ID"""
+        try:
+            return TelegramUser.get(TelegramUser.telegram_id == telegram_id)
+        except TelegramUser.DoesNotExist:
+            raise
+        except Exception as e:
+            logger.error(f'Error getting Telegram user {telegram_id}: {e}')
+            raise
+
+    def update_telegram_user_notifications(
+        self,
+        telegram_id: int,
+        daily_notifications: bool | None = None,
+        live_notifications: bool | None = None,
+        is_active: bool | None = None,
+    ) -> TelegramUser:
+        """Update Telegram user notification settings"""
+        try:
+            user = self.get_telegram_user(telegram_id)
+
+            if daily_notifications is not None:
+                user.daily_notifications = daily_notifications
+            if live_notifications is not None:
+                user.live_notifications = live_notifications
+            if is_active is not None:
+                user.is_active = is_active
+
+            user.save()
+            return user
+        except Exception as e:
+            logger.error(
+                f'Error updating Telegram user {telegram_id} notifications: {e}'
+            )
+            raise
+
+    def toggle_telegram_user_daily_notifications(
+        self, telegram_id: int
+    ) -> TelegramUser:
+        """Toggle daily notifications for a Telegram user"""
+        try:
+            user = self.get_telegram_user(telegram_id)
+            user.daily_notifications = not user.daily_notifications
+            user.save()
+            return user
+        except Exception as e:
+            logger.error(
+                f'Error toggling daily notifications for user {telegram_id}: {e}'
+            )
+            raise
+
+    def toggle_telegram_user_live_notifications(self, telegram_id: int) -> TelegramUser:
+        """Toggle live notifications for a Telegram user"""
+        try:
+            user = self.get_telegram_user(telegram_id)
+            user.live_notifications = not user.live_notifications
+            user.save()
+            return user
+        except Exception as e:
+            logger.error(
+                f'Error toggling live notifications for user {telegram_id}: {e}'
+            )
+            raise
+
+    def subscribe_telegram_user(self, telegram_id: int) -> TelegramUser:
+        """Subscribe user to all notifications"""
+        return self.update_telegram_user_notifications(
+            telegram_id=telegram_id,
+            daily_notifications=True,
+            live_notifications=True,
+            is_active=True,
+        )
+
+    def unsubscribe_telegram_user(self, telegram_id: int) -> TelegramUser:
+        """Unsubscribe user from all notifications"""
+        return self.update_telegram_user_notifications(
+            telegram_id=telegram_id,
+            daily_notifications=False,
+            live_notifications=False,
+            is_active=False,
+        )
+
+    # Notification-related methods
+    def get_users_for_live_notifications(self) -> list[TelegramUser]:
+        """Get users subscribed to live notifications"""
+        try:
+            return list(
+                TelegramUser.select().where(
+                    (TelegramUser.is_active) & (TelegramUser.live_notifications)
+                )
+            )
+        except Exception as e:
+            logger.error(f'Error getting users for live notifications: {e}')
+            return []
+
+    def get_users_for_daily_notifications(self) -> list[TelegramUser]:
+        """Get users subscribed to daily notifications"""
+        try:
+            return list(
+                TelegramUser.select().where(
+                    (TelegramUser.is_active) & (TelegramUser.daily_notifications)
+                )
+            )
+        except Exception as e:
+            logger.error(f'Error getting users for daily notifications: {e}')
+            return []
+
+    def log_notification(
+        self,
+        user: TelegramUser,
+        opportunity: BettingOpportunity | None = None,
+        message: str = '',
+        success: bool = True,
+        error_message: str | None = None,
+    ) -> NotificationLog:
+        """Log a notification attempt"""
+        try:
+            notification_log = NotificationLog.create(
+                user=user,
+                opportunity=opportunity,
+                message=message,
+                success=success,
+                error_message=error_message,
+            )
+            return notification_log
+        except Exception as e:
+            logger.error(f'Error logging notification: {e}')
+            raise

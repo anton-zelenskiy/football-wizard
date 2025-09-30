@@ -4,7 +4,7 @@ from typing import Any
 import structlog
 
 from app.bet_rules.structures import Bet
-from app.db.models import NotificationLog, TelegramUser
+from app.db.storage import FootballDataStorage
 
 
 logger = structlog.get_logger()
@@ -28,9 +28,8 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
     """Send betting opportunity to users subscribed to live notifications"""
     try:
         # Get users subscribed to live notifications
-        users = TelegramUser.select().where(
-            (TelegramUser.is_active) & (TelegramUser.live_notifications)
-        )
+        storage = FootballDataStorage()
+        users = storage.get_users_for_live_notifications()
         bot = get_bot_instance()
 
         message_text = _format_opportunity_message(opportunity)
@@ -42,7 +41,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                 )
 
                 # Log the notification
-                NotificationLog.create(
+                storage.log_notification(
                     user=user,
                     opportunity=None,  # Will be set when we have DB opportunity
                     message=message_text,
@@ -59,7 +58,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                 )
 
                 # Log the failed notification
-                NotificationLog.create(
+                storage.log_notification(
                     user=user,
                     opportunity=None,
                     message=message_text,
@@ -103,9 +102,8 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
         return
 
     try:
-        users = TelegramUser.select().where(
-            (TelegramUser.is_active) & (TelegramUser.daily_notifications)
-        )
+        storage = FootballDataStorage()
+        users = storage.get_users_for_daily_notifications()
         bot = get_bot_instance()
 
         # Sort opportunities by confidence (highest first)
