@@ -2,9 +2,9 @@
 Telegram Mini App API routes for Football Betting Analysis
 """
 
-import structlog
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
+import structlog
 
 from app.api.security import (
     TelegramWebAppData,
@@ -14,6 +14,7 @@ from app.api.security import (
     validate_request_origin,
 )
 from app.db.storage import FootballDataStorage
+
 
 logger = structlog.get_logger()
 

@@ -6,9 +6,9 @@ Runs background tasks for league scraping, data refresh, and betting analysis
 
 from typing import Any
 
-import structlog
 from arq.connections import RedisSettings
 from arq.cron import cron
+import structlog
 
 from app.settings import settings
 from app.tasks import (
@@ -17,13 +17,14 @@ from app.tasks import (
     refresh_league_data,
 )
 
+
 logger = structlog.get_logger()
 
 
 async def heartbeat(ctx: dict[str, Any]) -> str:
     """Simple heartbeat function to test if worker is working"""
-    logger.info('💓 Heartbeat: Worker is alive and working!')
-    return 'Worker heartbeat successful'
+    logger.info("💓 Heartbeat: Worker is alive and working!")
+    return "Worker heartbeat successful"
 
 
 # ARQ worker configuration
@@ -42,32 +43,27 @@ class WorkerSettings:
     cron_jobs = [
         # Daily scheduled analysis at 9 AM UTC
         cron(
-            daily_scheduled_analysis, 
-            hour=9, 
+            daily_scheduled_analysis,
+            hour=9,
             minute=0,
             unique=True,
-            job_id='daily_scheduled_analysis'
+            job_id="daily_scheduled_analysis",
         ),
         # League data refresh daily at 10 AM UTC
         cron(
-            refresh_league_data, 
-            hour=10, 
+            refresh_league_data,
+            hour=10,
             minute=0,
             unique=True,
-            job_id='refresh_league_data'
+            job_id="refresh_league_data",
         ),
         # Live matches analysis every 3 minutes (includes scraping and analysis)
         cron(
             live_matches_analysis,
             minute=list(range(0, 60, 1)),
             unique=True,
-            job_id='live_matches_analysis'
+            job_id="live_matches_analysis",
         ),
         # Heartbeat every minute for testing
-        cron(
-            heartbeat,
-            minute=list(range(60)),
-            unique=True,
-            job_id='heartbeat'
-        ),
+        cron(heartbeat, minute=list(range(60)), unique=True, job_id="heartbeat"),
     ]

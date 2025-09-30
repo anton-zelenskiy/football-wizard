@@ -3,12 +3,13 @@ from typing import Any
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.bot import WebhookConfig, bot, dp, get_webhook_url, webhook_secret_token
+from app.bot import bot, dp, get_webhook_url, webhook_secret_token
+
 
 router = APIRouter()
 
 
-@router.post('/webhook', include_in_schema=False)
+@router.post("/webhook", include_in_schema=False)
 async def webhook_handler(request: Request):
     """
     Handle Telegram webhook requests
@@ -25,16 +26,20 @@ async def webhook_handler(request: Request):
         )
 
         # Process the update directly
-        await webhook_request_handler.dispatcher.feed_webhook_update(bot=bot, update=update)
+        await webhook_request_handler.dispatcher.feed_webhook_update(
+            bot=bot, update=update
+        )
         return Response(status_code=status.HTTP_200_OK)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Failed to process webhook update: {str(e)}',
+            detail=f"Failed to process webhook update: {str(e)}",
         )
 
 
-@router.get('/set-webhook', status_code=status.HTTP_200_OK, response_model=dict[str, Any])
+@router.get(
+    "/set-webhook", status_code=status.HTTP_200_OK, response_model=dict[str, Any]
+)
 async def set_webhook() -> Any:
     """
     Set a webhook for the Telegram bot.
@@ -59,18 +64,20 @@ async def set_webhook() -> Any:
         webhook_info = await bot.get_webhook_info()
 
         return {
-            'success': True,
-            'webhook_url': webhook_url,
-            'webhook_info': webhook_info.model_dump(),
+            "success": True,
+            "webhook_url": webhook_url,
+            "webhook_info": webhook_info.model_dump(),
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Failed to set webhook: {str(e)}',
+            detail=f"Failed to set webhook: {str(e)}",
         )
 
 
-@router.post('/delete-webhook', status_code=status.HTTP_200_OK, response_model=dict[str, Any])
+@router.post(
+    "/delete-webhook", status_code=status.HTTP_200_OK, response_model=dict[str, Any]
+)
 async def delete_webhook(drop_pending: bool = True) -> Any:
     """
     Delete the Telegram bot webhook.
@@ -89,18 +96,20 @@ async def delete_webhook(drop_pending: bool = True) -> Any:
         webhook_info = await bot.get_webhook_info()
 
         return {
-            'success': True,
-            'webhook_deleted': True,
-            'webhook_info': webhook_info.model_dump(),
+            "success": True,
+            "webhook_deleted": True,
+            "webhook_info": webhook_info.model_dump(),
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Failed to delete webhook: {str(e)}',
+            detail=f"Failed to delete webhook: {str(e)}",
         )
 
 
-@router.get('/webhook-info', status_code=status.HTTP_200_OK, response_model=dict[str, Any])
+@router.get(
+    "/webhook-info", status_code=status.HTTP_200_OK, response_model=dict[str, Any]
+)
 async def get_webhook_info() -> Any:
     """
     Get current webhook information.
@@ -113,11 +122,11 @@ async def get_webhook_info() -> Any:
         webhook_info = await bot.get_webhook_info()
 
         return {
-            'success': True,
-            'webhook_info': webhook_info.model_dump(),
+            "success": True,
+            "webhook_info": webhook_info.model_dump(),
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Failed to get webhook info: {str(e)}',
+            detail=f"Failed to get webhook info: {str(e)}",
         )

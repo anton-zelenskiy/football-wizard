@@ -8,9 +8,10 @@ import json
 import time
 import urllib.parse
 
-import structlog
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
+import structlog
+
 
 logger = structlog.get_logger()
 

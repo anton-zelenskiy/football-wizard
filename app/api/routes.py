@@ -2,11 +2,11 @@
 Shared API routes for Football Betting Analysis
 """
 
-import structlog
 from fastapi import APIRouter, HTTPException
+import structlog
 
-from app.db.models import BettingOpportunity, Match, Team, TelegramUser
 from app.db.storage import FootballDataStorage
+
 
 logger = structlog.get_logger()
 
@@ -65,7 +65,9 @@ async def get_league_teams(country: str, league_name: str):
 
 
 @router.get("/leagues/{country}/{league_name}/matches")
-async def get_league_matches(country: str, league_name: str, limit: int = 50, status: str = None):
+async def get_league_matches(
+    country: str, league_name: str, limit: int = 50, status: str = None
+):
     """Get matches for a specific league"""
     try:
         matches = storage.get_league_matches(league_name, country, limit)
@@ -106,8 +108,14 @@ async def get_league_fixtures(country: str, league_name: str, limit: int = 10):
         return [
             {
                 "id": fixture.id,
-                "home_team": {"id": fixture.home_team.id, "name": fixture.home_team.name},
-                "away_team": {"id": fixture.away_team.id, "name": fixture.away_team.name},
+                "home_team": {
+                    "id": fixture.home_team.id,
+                    "name": fixture.home_team.name,
+                },
+                "away_team": {
+                    "id": fixture.away_team.id,
+                    "name": fixture.away_team.name,
+                },
                 "home_score": fixture.home_score,
                 "away_score": fixture.away_score,
                 "match_date": fixture.match_date.isoformat(),
@@ -168,14 +176,20 @@ async def get_league_stats():
 
         for league in leagues:
             teams = storage.get_league_teams(league.name, league.country)
-            matches = storage.get_league_matches(league.name, league.country, limit=1000)  # Get all matches
+            matches = storage.get_league_matches(
+                league.name, league.country, limit=1000
+            )  # Get all matches
 
-            live_matches = [m for m in matches if m.status == 'live']
-            finished_matches = [m for m in matches if m.status == 'finished']
+            live_matches = [m for m in matches if m.status == "live"]
+            finished_matches = [m for m in matches if m.status == "finished"]
 
             stats.append(
                 {
-                    "league": {"id": league.id, "name": league.name, "country": league.country},
+                    "league": {
+                        "id": league.id,
+                        "name": league.name,
+                        "country": league.country,
+                    },
                     "teams_count": len(teams),
                     "total_matches": len(matches),
                     "live_matches": len(live_matches),
@@ -221,4 +235,4 @@ async def get_team_matches(team_name: str, limit: int = 10):
         ]
     except Exception as e:
         logger.error(f"Error getting matches for team {team_name}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") 
+        raise HTTPException(status_code=500, detail="Internal server error")

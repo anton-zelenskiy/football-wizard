@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.settings import settings
 
+
 # Get Telegram bot token from settings
 TELEGRAM_BOT_TOKEN = settings.telegram_bot_token
 
@@ -25,6 +26,7 @@ dp = Dispatcher()
 
 class WebhookConfig(BaseModel):
     """Webhook configuration model"""
+
     url: str
     drop_pending_updates: bool = True
     secret_token: str | None = None

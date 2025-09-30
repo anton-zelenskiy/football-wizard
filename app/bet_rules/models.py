@@ -9,61 +9,63 @@ from app.bet_rules.team_analysis import TeamAnalysis
 class BetType(str, Enum):
     """Betting outcome types"""
 
-    WIN = 'win'
-    DRAW = 'draw'
-    LOSE = 'lose'
-    DRAW_OR_WIN = 'draw_or_win'
-    WIN_OR_LOSE = 'win_or_lose'
-    GOAL = 'goal'
+    WIN = "win"
+    DRAW = "draw"
+    LOSE = "lose"
+    DRAW_OR_WIN = "draw_or_win"
+    WIN_OR_LOSE = "win_or_lose"
+    GOAL = "goal"
 
 
 class BetOutcome(str, Enum):
     """Betting result outcomes"""
 
-    WIN = 'win'
-    LOSE = 'lose'
+    WIN = "win"
+    LOSE = "lose"
 
 
 class MatchResult(BaseModel):
     """Match result information for outcome determination"""
 
-    home_score: int | None = Field(description='Home team score')
-    away_score: int | None = Field(description='Away team score')
-    home_team: str = Field(description='Home team name')
-    away_team: str = Field(description='Away team name')
-    team_analyzed: str = Field(description='Team that was analyzed for the bet')
+    home_score: int | None = Field(description="Home team score")
+    away_score: int | None = Field(description="Away team score")
+    home_team: str = Field(description="Home team name")
+    away_team: str = Field(description="Away team name")
+    team_analyzed: str = Field(description="Team that was analyzed for the bet")
 
     @property
     def result_type(self) -> str:
         """Determine the match result type"""
         if self.home_score is None or self.away_score is None:
-            return 'incomplete'
+            return "incomplete"
         elif self.home_score > self.away_score:
-            return 'home_win'
+            return "home_win"
         elif self.away_score > self.home_score:
-            return 'away_win'
+            return "away_win"
         else:
-            return 'draw'
+            return "draw"
 
 
 class BettingRule(BaseModel):
     """Base betting rule model"""
 
-    name: str = Field(description='Rule name')
-    description: str = Field(description='Rule description')
-    rule_type: str = Field(description='Rule type identifier')
-    bet_type: BetType = Field(description='Expected bet type')
-    base_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description='Base confidence level')
+    name: str = Field(description="Rule name")
+    description: str = Field(description="Rule description")
+    rule_type: str = Field(description="Rule type identifier")
+    bet_type: BetType = Field(description="Expected bet type")
+    base_confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Base confidence level"
+    )
 
     def calculate_confidence(
         self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
     ) -> float:
         """Calculate confidence based on team analysis"""
-        raise NotImplementedError('Subclasses must implement calculate_confidence')
+        raise NotImplementedError("Subclasses must implement calculate_confidence")
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(self, match_result: "MatchResult") -> str | None:
         """Determine if the bet was won or lost based on match result"""
-        raise NotImplementedError('Subclasses must implement determine_outcome')
+        raise NotImplementedError("Subclasses must implement determine_outcome")
 
     @property
     def _base_confidence_calculator(self):
@@ -94,9 +96,9 @@ class ConsecutiveLossesRule(BettingRule):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(
-            name='Consecutive Losses Rule',
-            description='Team with >= 3 consecutive losses -> draw_or_win',
-            rule_type='consecutive_losses',
+            name="Consecutive Losses Rule",
+            description="Team with >= 3 consecutive losses -> draw_or_win",
+            rule_type="consecutive_losses",
             bet_type=BetType.DRAW_OR_WIN,
             base_confidence=0.5,
             **data,
@@ -111,37 +113,43 @@ class ConsecutiveLossesRule(BettingRule):
 
         confidence = self._base_confidence_calculator(team_analysis)
         # Add rank-based confidence if opponent analysis is available
-        if opponent_analysis and team_analysis.team.rank and opponent_analysis.team.rank:
+        if (
+            opponent_analysis
+            and team_analysis.team.rank
+            and opponent_analysis.team.rank
+        ):
             rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
-            if rank_difference > 0:  # Team we're betting on has higher rank (lower number)
+            if (
+                rank_difference > 0
+            ):  # Team we're betting on has higher rank (lower number)
                 rank_bonus = 0.025 * rank_difference
                 confidence += rank_bonus
                 confidence = min(1.0, confidence)  # Cap at 1.0
         return confidence
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(self, match_result: "MatchResult") -> str | None:
         """Determine outcome for consecutive losses rule (draw_or_win)"""
         from .models import BetOutcome
 
         # Check if match is incomplete
-        if match_result.result_type == 'incomplete':
+        if match_result.result_type == "incomplete":
             return None
 
         if match_result.team_analyzed == match_result.home_team:
             # Home team is the one with consecutive losses
-            if match_result.result_type in ['home_win', 'draw']:
+            if match_result.result_type in ["home_win", "draw"]:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
         elif match_result.team_analyzed == match_result.away_team:
             # Away team is the one with consecutive losses
-            if match_result.result_type in ['away_win', 'draw']:
+            if match_result.result_type in ["away_win", "draw"]:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
         else:
             # Both teams fit the rule - check if either team didn't lose
-            if match_result.result_type == 'draw':
+            if match_result.result_type == "draw":
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
@@ -152,9 +160,9 @@ class ConsecutiveDrawsRule(BettingRule):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(
-            name='Consecutive Draws Rule',
-            description='Team with >= 3 consecutive draws -> win_or_lose',
-            rule_type='consecutive_draws',
+            name="Consecutive Draws Rule",
+            description="Team with >= 3 consecutive draws -> win_or_lose",
+            rule_type="consecutive_draws",
             bet_type=BetType.WIN_OR_LOSE,
             base_confidence=0.5,
             **data,
@@ -169,31 +177,31 @@ class ConsecutiveDrawsRule(BettingRule):
 
         return self._base_confidence_calculator(team_analysis)
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(self, match_result: "MatchResult") -> str | None:
         """Determine outcome for consecutive draws rule (win_or_lose)"""
         from .models import BetOutcome
 
         # Check if match is incomplete
-        if match_result.result_type == 'incomplete':
+        if match_result.result_type == "incomplete":
             return None
 
         if match_result.team_analyzed == match_result.home_team:
             # Home team is the one with consecutive draws
             # For win_or_lose bet: win if home team wins OR loses (not draw)
-            if match_result.result_type in ['home_win', 'away_win']:
+            if match_result.result_type in ["home_win", "away_win"]:
                 return BetOutcome.WIN.value
             else:  # draw
                 return BetOutcome.LOSE.value
         elif match_result.team_analyzed == match_result.away_team:
             # Away team is the one with consecutive draws
             # For win_or_lose bet: win if away team wins OR loses (not draw)
-            if match_result.result_type in ['home_win', 'away_win']:
+            if match_result.result_type in ["home_win", "away_win"]:
                 return BetOutcome.WIN.value
             else:  # draw
                 return BetOutcome.LOSE.value
         else:
             # Both teams fit the rule - check if either team won
-            if match_result.result_type in ['home_win', 'away_win']:
+            if match_result.result_type in ["home_win", "away_win"]:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
@@ -204,9 +212,9 @@ class Top5ConsecutiveLossesRule(BettingRule):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(
-            name='Top 5 Consecutive Losses Rule',
-            description='Top 5 team with >= 2 consecutive losses -> draw_or_win',
-            rule_type='top5_consecutive_losses',
+            name="Top 5 Consecutive Losses Rule",
+            description="Top 5 team with >= 2 consecutive losses -> draw_or_win",
+            rule_type="top5_consecutive_losses",
             bet_type=BetType.DRAW_OR_WIN,
             base_confidence=0.5,
             **data,
@@ -221,29 +229,29 @@ class Top5ConsecutiveLossesRule(BettingRule):
 
         return self._base_confidence_calculator(team_analysis)
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(self, match_result: "MatchResult") -> str | None:
         """Determine outcome for top-5 consecutive losses rule (draw_or_win)"""
         from .models import BetOutcome
 
         # Check if match is incomplete
-        if match_result.result_type == 'incomplete':
+        if match_result.result_type == "incomplete":
             return None
 
         if match_result.team_analyzed == match_result.home_team:
             # Home team is the top-5 team with consecutive losses
-            if match_result.result_type in ['home_win', 'draw']:
+            if match_result.result_type in ["home_win", "draw"]:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
         elif match_result.team_analyzed == match_result.away_team:
             # Away team is the top-5 team with consecutive losses
-            if match_result.result_type in ['away_win', 'draw']:
+            if match_result.result_type in ["away_win", "draw"]:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
         else:
             # Both teams fit the rule - check if either team didn't lose
-            if match_result.result_type == 'draw':
+            if match_result.result_type == "draw":
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
@@ -254,9 +262,9 @@ class LiveMatchRedCardRule(BettingRule):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(
-            name='Live Match Red Card Rule',
-            description='Live match with red card and draw -> bet on team without red card',
-            rule_type='live_red_card',
+            name="Live Match Red Card Rule",
+            description="Live match with red card and draw -> bet on team without red card",
+            rule_type="live_red_card",
             bet_type=BetType.WIN,
             base_confidence=0.5,
             **data,
@@ -281,7 +289,7 @@ class LiveMatchRedCardRule(BettingRule):
         """Calculate confidence for live match with red cards"""
         # Only apply if there's a red card and the score is tied
         if (red_cards_home == 0 and red_cards_away == 0) or home_score != away_score:
-            return 0.0, 'No red card or not a draw'
+            return 0.0, "No red card or not a draw"
 
         confidence = self.base_confidence
 
@@ -318,28 +326,28 @@ class LiveMatchRedCardRule(BettingRule):
             if home_analysis.consecutive_losses >= 2:
                 confidence += 0.05 * min(home_analysis.consecutive_losses - 1, 2)
         else:
-            return 0.0, 'Both teams have red cards or invalid state'
+            return 0.0, "Both teams have red cards or invalid state"
 
         return min(1.0, confidence), team_analyzed
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(self, match_result: "MatchResult") -> str | None:
         """Determine outcome for live red card rule (win)"""
         from .models import BetOutcome
 
         # Check if match is incomplete
-        if match_result.result_type == 'incomplete':
+        if match_result.result_type == "incomplete":
             return None
 
         # For live red card rule, we bet on the team without red card to win
         if match_result.team_analyzed == match_result.home_team:
             # We bet on home team to win
-            if match_result.result_type == 'home_win':
+            if match_result.result_type == "home_win":
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
         elif match_result.team_analyzed == match_result.away_team:
             # We bet on away team to win
-            if match_result.result_type == 'away_win':
+            if match_result.result_type == "away_win":
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
@@ -350,19 +358,21 @@ class LiveMatchRedCardRule(BettingRule):
 class Bet(BaseModel):
     """Betting opportunity result"""
 
-    match_id: int | None = Field(default=None, description='Match ID')
-    home_team: str = Field(description='Home team name')
-    away_team: str = Field(description='Away team name')
-    league: str = Field(description='League name')
-    country: str = Field(description='Country name')
-    match_date: str | None = Field(default=None, description='Match date and time')
-    rule_name: str = Field(description='Rule that triggered the opportunity')
-    rule_type: str = Field(description='Rule type identifier')
-    bet_type: BetType = Field(description='Recommended bet type')
-    confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
-    team_analyzed: str = Field(description='Team that was analyzed')
+    match_id: int | None = Field(default=None, description="Match ID")
+    home_team: str = Field(description="Home team name")
+    away_team: str = Field(description="Away team name")
+    league: str = Field(description="League name")
+    country: str = Field(description="Country name")
+    match_date: str | None = Field(default=None, description="Match date and time")
+    rule_name: str = Field(description="Rule that triggered the opportunity")
+    rule_type: str = Field(description="Rule type identifier")
+    bet_type: BetType = Field(description="Recommended bet type")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence level")
+    team_analyzed: str = Field(description="Team that was analyzed")
     opportunity_type: str = Field(
-        default='historical_analysis', 
-        description='Type of opportunity: historical_analysis or live_opportunity'
+        default="historical_analysis",
+        description="Type of opportunity: historical_analysis or live_opportunity",
     )
-    details: dict[str, Any] = Field(default_factory=dict, description='Additional details')
+    details: dict[str, Any] = Field(
+        default_factory=dict, description="Additional details"
+    )

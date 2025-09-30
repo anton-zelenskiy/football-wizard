@@ -1,4 +1,3 @@
-import structlog
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import (
@@ -8,6 +7,7 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
+import structlog
 
 from app.bot.notifications import (
     format_completed_opportunities_message,
@@ -16,6 +16,7 @@ from app.bot.notifications import (
 from app.db.models import TelegramUser
 from app.db.storage import FootballDataStorage
 from app.settings import settings
+
 
 logger = structlog.get_logger()
 
@@ -34,11 +35,11 @@ async def start_command(message: Message) -> None:
     user, created = TelegramUser.get_or_create(
         telegram_id=user_id,
         defaults={
-            'username': username,
-            'first_name': first_name,
-            'last_name': last_name,
-            'is_active': True,
-        }
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "is_active": True,
+        },
     )
 
     if not created:
@@ -64,14 +65,20 @@ async def start_command(message: Message) -> None:
         f"Use /help to see all available commands."
     )
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🎯 Betting Opportunities",
-            web_app=WebAppInfo(url=f"{settings.base_host}/football/api/v1/mini-app/")
-        )],
-        [InlineKeyboardButton(text="📊 View Settings", callback_data="settings")],
-        [InlineKeyboardButton(text="❓ Help", callback_data="help")]
-    ])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎯 Betting Opportunities",
+                    web_app=WebAppInfo(
+                        url=f"{settings.base_host}/football/api/v1/mini-app/"
+                    ),
+                )
+            ],
+            [InlineKeyboardButton(text="📊 View Settings", callback_data="settings")],
+            [InlineKeyboardButton(text="❓ Help", callback_data="help")],
+        ]
+    )
 
     await message.answer(welcome_text, reply_markup=keyboard)
     logger.info(f"User {user_id} started the bot")
@@ -80,18 +87,24 @@ async def start_command(message: Message) -> None:
 @router.message(Command("bettings"))
 async def bettings_command(message: Message) -> None:
     """Handle /bettings command - open Mini App"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🎯 Open Betting Opportunities",
-            web_app=WebAppInfo(url=f"{settings.base_host}/football/api/v1/mini-app/")
-        )]
-    ])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎯 Open Betting Opportunities",
+                    web_app=WebAppInfo(
+                        url=f"{settings.base_host}/football/api/v1/mini-app/"
+                    ),
+                )
+            ]
+        ]
+    )
 
     await message.answer(
         "🎯 <b>Betting Opportunities</b>\n\n"
         "Click the button below to open the interactive betting opportunities interface!",
         reply_markup=keyboard,
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     logger.info(f"User {message.from_user.id} requested betting opportunities Mini App")
 
@@ -146,22 +159,30 @@ async def status_command(message: Message) -> None:
         )
 
         if user.is_active:
-            status_text += "🎯 You'll receive betting opportunities based on your settings."
+            status_text += (
+                "🎯 You'll receive betting opportunities based on your settings."
+            )
         else:
-            status_text += "❌ You're not receiving notifications. Use /subscribe to start."
+            status_text += (
+                "❌ You're not receiving notifications. Use /subscribe to start."
+            )
 
         keyboard_buttons = []
         if user.is_active:
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="⚙️ Settings", callback_data="settings")
-            ])
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="🔕 Unsubscribe", callback_data="unsubscribe")
-            ])
+            keyboard_buttons.append(
+                [InlineKeyboardButton(text="⚙️ Settings", callback_data="settings")]
+            )
+            keyboard_buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text="🔕 Unsubscribe", callback_data="unsubscribe"
+                    )
+                ]
+            )
         else:
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="✅ Subscribe", callback_data="subscribe")
-            ])
+            keyboard_buttons.append(
+                [InlineKeyboardButton(text="✅ Subscribe", callback_data="subscribe")]
+            )
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         await message.answer(status_text, reply_markup=keyboard)
@@ -366,7 +387,9 @@ async def completed_command(message: Message) -> None:
         statistics = storage.get_betting_statistics()
 
         # Format and send the message
-        completed_text = format_completed_opportunities_message(opportunities, statistics)
+        completed_text = format_completed_opportunities_message(
+            opportunities, statistics
+        )
         await message.answer(completed_text, parse_mode="HTML")
 
         logger.info(
@@ -460,10 +483,10 @@ async def handle_toggle_daily(callback: CallbackQuery) -> None:
         user.save()
 
         status = "enabled" if user.daily_notifications else "disabled"
-        await callback.message.edit_text(
-            f"✅ Daily notifications {status}!"
+        await callback.message.edit_text(f"✅ Daily notifications {status}!")
+        logger.info(
+            f"User {user_id} toggled daily notifications: {user.daily_notifications}"
         )
-        logger.info(f"User {user_id} toggled daily notifications: {user.daily_notifications}")
 
     except TelegramUser.DoesNotExist:
         await callback.message.edit_text(
@@ -483,10 +506,10 @@ async def handle_toggle_live(callback: CallbackQuery) -> None:
         user.save()
 
         status = "enabled" if user.live_notifications else "disabled"
-        await callback.message.edit_text(
-            f"✅ Live notifications {status}!"
+        await callback.message.edit_text(f"✅ Live notifications {status}!")
+        logger.info(
+            f"User {user_id} toggled live notifications: {user.live_notifications}"
         )
-        logger.info(f"User {user_id} toggled live notifications: {user.live_notifications}")
 
     except TelegramUser.DoesNotExist:
         await callback.message.edit_text(
@@ -509,33 +532,43 @@ async def _show_settings(user_id: int, chat_id: int) -> None:
             f"Choose your notification preferences:"
         )
 
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"📅 Daily: {'ON' if user.daily_notifications else 'OFF'}", 
-                callback_data="toggle_daily"
-            )],
-            [InlineKeyboardButton(
-                text=f"🔴 Live: {'ON' if user.live_notifications else 'OFF'}", 
-                callback_data="toggle_live"
-            )],
-            [InlineKeyboardButton(
-                text="✅ Subscribe All", 
-                callback_data="subscribe"
-            )],
-            [InlineKeyboardButton(
-                text="🔕 Unsubscribe All", 
-                callback_data="unsubscribe"
-            )]
-        ])
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"📅 Daily: {'ON' if user.daily_notifications else 'OFF'}",
+                        callback_data="toggle_daily",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=f"🔴 Live: {'ON' if user.live_notifications else 'OFF'}",
+                        callback_data="toggle_live",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="✅ Subscribe All", callback_data="subscribe"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔕 Unsubscribe All", callback_data="unsubscribe"
+                    )
+                ],
+            ]
+        )
 
         from app.bot.core import bot
+
         await bot.send_message(chat_id, settings_text, reply_markup=keyboard)
 
     except TelegramUser.DoesNotExist:
         from app.bot.core import bot
+
         await bot.send_message(
-            chat_id, 
-            "❌ You're not registered. Use /start to subscribe to notifications."
+            chat_id,
+            "❌ You're not registered. Use /start to subscribe to notifications.",
         )
 
 
@@ -555,6 +588,5 @@ async def _show_help(chat_id: int) -> None:
         "Use /settings to customize your notifications."
     )
     from app.bot.core import bot
+
     await bot.send_message(chat_id, help_text)
-
-

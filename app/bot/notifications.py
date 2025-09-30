@@ -6,6 +6,7 @@ import structlog
 from app.bet_rules.models import Bet
 from app.db.models import NotificationLog, TelegramUser
 
+
 logger = structlog.get_logger()
 
 
@@ -18,6 +19,7 @@ def get_bot_instance() -> Any:
     global _bot_instance
     if _bot_instance is None:
         from app.bot.core import bot
+
         _bot_instance = bot
     return _bot_instance
 
@@ -27,8 +29,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
     try:
         # Get users subscribed to live notifications
         users = TelegramUser.select().where(
-            (TelegramUser.is_active) & 
-            (TelegramUser.live_notifications)
+            (TelegramUser.is_active) & (TelegramUser.live_notifications)
         )
         bot = get_bot_instance()
 
@@ -37,9 +38,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
         for user in users:
             try:
                 await bot.send_message(
-                    user.telegram_id,
-                    message_text,
-                    parse_mode="HTML"
+                    user.telegram_id, message_text, parse_mode="HTML"
                 )
 
                 # Log the notification
@@ -47,7 +46,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     user=user,
                     opportunity=None,  # Will be set when we have DB opportunity
                     message=message_text,
-                    success=True
+                    success=True,
                 )
 
                 # Add delay to avoid rate limiting
@@ -55,8 +54,8 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to send notification to user {user.telegram_id}", 
-                    error=str(e)
+                    f"Failed to send notification to user {user.telegram_id}",
+                    error=str(e),
                 )
 
                 # Log the failed notification
@@ -65,7 +64,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     opportunity=None,
                     message=message_text,
                     success=False,
-                    error_message=str(e)
+                    error_message=str(e),
                 )
 
         logger.info(f"Sent live betting opportunity to {len(users)} users")
@@ -77,8 +76,10 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
 def _format_opportunity_message(opportunity: Bet) -> str:
     """Format betting opportunity as Telegram message"""
     confidence_emoji = (
-        "🟢" if opportunity.confidence >= 0.8 
-        else "🟡" if opportunity.confidence >= 0.6 
+        "🟢"
+        if opportunity.confidence >= 0.8
+        else "🟡"
+        if opportunity.confidence >= 0.6
         else "🔴"
     )
 
@@ -103,28 +104,27 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
 
     try:
         users = TelegramUser.select().where(
-            (TelegramUser.is_active) & 
-            (TelegramUser.daily_notifications)
+            (TelegramUser.is_active) & (TelegramUser.daily_notifications)
         )
         bot = get_bot_instance()
 
         # Sort opportunities by confidence (highest first)
-        sorted_opportunities = sorted(opportunities, key=lambda x: x.confidence, reverse=True)
+        sorted_opportunities = sorted(
+            opportunities, key=lambda x: x.confidence, reverse=True
+        )
         summary_text = _format_daily_summary(sorted_opportunities)
 
         for user in users:
             try:
                 await bot.send_message(
-                    user.telegram_id,
-                    summary_text,
-                    parse_mode="HTML"
+                    user.telegram_id, summary_text, parse_mode="HTML"
                 )
                 await asyncio.sleep(0.1)
 
             except Exception as e:
                 logger.error(
-                    f"Failed to send daily summary to user {user.telegram_id}", 
-                    error=str(e)
+                    f"Failed to send daily summary to user {user.telegram_id}",
+                    error=str(e),
                 )
 
         logger.info(f"Sent daily summary to {len(users)} users")
@@ -142,13 +142,11 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
 
     for i, opp in enumerate(opportunities, 1):  # Show all opportunities
         confidence_emoji = (
-            "🟢" if opp.confidence >= 0.8 
-            else "🟡" if opp.confidence >= 0.6 
-            else "🔴"
+            "🟢" if opp.confidence >= 0.8 else "🟡" if opp.confidence >= 0.6 else "🔴"
         )
 
         # Format bet type for display
-        bet_type_display = opp.bet_type.value.replace('_', ' ').title()
+        bet_type_display = opp.bet_type.value.replace("_", " ").title()
 
         # Determine which team to bet on based on team_analyzed
         if opp.team_analyzed == opp.home_team:
@@ -192,8 +190,10 @@ def format_opportunities_message(opportunities: list) -> str:
 
     for i, opp in enumerate(opportunities, 1):
         confidence_emoji = (
-            "🟢" if opp.confidence_score >= 0.8 
-            else "🟡" if opp.confidence_score >= 0.6 
+            "🟢"
+            if opp.confidence_score >= 0.8
+            else "🟡"
+            if opp.confidence_score >= 0.6
             else "🔴"
         )
 
@@ -202,14 +202,14 @@ def format_opportunities_message(opportunities: list) -> str:
         if opp.match:
             match_info = f"⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}"
             if opp.match.match_date:
-                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_date = opp.match.match_date.strftime("%Y-%m-%d %H:%M")
                 match_info += f"\n📅 {match_date}"
         else:
             match_info = "⚽ Match details not available"
 
         # Get details for team analyzed
         details = opp.get_details()
-        team_analyzed = details.get('team_analyzed', 'Unknown')
+        team_analyzed = details.get("team_analyzed", "Unknown")
 
         message += (
             f"{i}. {confidence_emoji} <b>{opp.rule_triggered}</b>\n"
@@ -225,7 +225,9 @@ def format_opportunities_message(opportunities: list) -> str:
     return message
 
 
-def format_completed_opportunities_message(opportunities: list, statistics: dict) -> str:
+def format_completed_opportunities_message(
+    opportunities: list, statistics: dict
+) -> str:
     """Format completed betting opportunities message with statistics"""
     if not opportunities:
         return (
@@ -252,12 +254,16 @@ def format_completed_opportunities_message(opportunities: list, statistics: dict
 
     for i, opp in enumerate(opportunities, 1):
         # Outcome emoji
-        outcome_emoji = "✅" if opp.outcome == "win" else "❌" if opp.outcome == "lose" else "⏳"
-        
+        outcome_emoji = (
+            "✅" if opp.outcome == "win" else "❌" if opp.outcome == "lose" else "⏳"
+        )
+
         # Confidence emoji
         confidence_emoji = (
-            "🟢" if opp.confidence_score >= 0.8 
-            else "🟡" if opp.confidence_score >= 0.6 
+            "🟢"
+            if opp.confidence_score >= 0.8
+            else "🟡"
+            if opp.confidence_score >= 0.6
             else "🔴"
         )
 
@@ -268,14 +274,14 @@ def format_completed_opportunities_message(opportunities: list, statistics: dict
             if opp.match.home_score is not None and opp.match.away_score is not None:
                 match_info += f" ({opp.match.home_score}-{opp.match.away_score})"
             if opp.match.match_date:
-                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
+                match_date = opp.match.match_date.strftime("%Y-%m-%d %H:%M")
                 match_info += f"\n📅 {match_date}"
         else:
             match_info = "⚽ Match details not available"
 
         # Get details for team analyzed
         details = opp.get_details()
-        team_analyzed = details.get('team_analyzed', 'Unknown')
+        team_analyzed = details.get("team_analyzed", "Unknown")
 
         message += (
             f"{i}. {outcome_emoji} <b>{opp.rule_triggered}</b>\n"

@@ -26,7 +26,7 @@ A comprehensive football betting analysis application that uses historical data 
 
 ### Historical Analysis Rules
 1. **Top-10 Team Losing Streak**: Teams in top-10 with 3+ consecutive losses
-2. **Top-10 Team Drawing Streak**: Teams in top-10 with 3+ consecutive draws  
+2. **Top-10 Team Drawing Streak**: Teams in top-10 with 3+ consecutive draws
 3. **Top-5 Team Losing Streak**: Teams in top-5 with 2+ consecutive losses
 4. **Top-8 Team No Goals**: Teams in top-8 with no goals in last 2+ matches
 5. **Coach Change Detection**: Teams with poor recent form (potential coaching issues)
@@ -263,7 +263,7 @@ The worker runs the following tasks with cron scheduling:
 ```python
 # Monitored Leagues
 monitored_leagues = [
-    'Premier League', 'LaLiga', 'Bundesliga', 'Serie A', 
+    'Premier League', 'LaLiga', 'Bundesliga', 'Serie A',
     'Ligue 1', 'Eredivisie', 'Primeira Liga', 'Russian Premier League',
     'Champions League', 'Europa League', 'Conference League'
 ]

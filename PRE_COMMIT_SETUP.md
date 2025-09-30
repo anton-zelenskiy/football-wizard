@@ -35,12 +35,28 @@ The pre-commit configuration includes:
 
 - **Ruff linter** - Fast Python linter with auto-fix capabilities
 - **Ruff formatter** - Code formatting
+- **Import sorting** - Automatic import organization and sorting
 - **Basic hooks** - Trailing whitespace, end-of-file, YAML validation, etc.
 
 ## Configuration
 
 - **Ruff settings**: Configured in `pyproject.toml`
 - **Pre-commit hooks**: Configured in `.pre-commit-config.yaml`
+
+## Import Sorting
+
+The pre-commit hooks include automatic import sorting with the following features:
+
+- **Automatic sorting** of import statements
+- **Grouping** imports by type (standard library, third-party, local)
+- **Consistent formatting** with proper spacing
+- **Removal** of unused imports
+- **Organization** of import statements within each group
+
+Import order:
+1. Standard library imports
+2. Third-party imports
+3. Local application imports (from `app` package)
 
 ## Usage
 

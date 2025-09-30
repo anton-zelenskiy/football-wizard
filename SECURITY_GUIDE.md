@@ -50,7 +50,7 @@ def validate_telegram_webapp_data(init_data: str, bot_token: str):
 RATE_LIMIT_REQUESTS = 100  # requests per window
 RATE_LIMIT_WINDOW = 3600   # 1 hour in seconds
 
-# Per-IP limits  
+# Per-IP limits
 MAX_REQUESTS_PER_MINUTE = 60
 ```
 

@@ -4,9 +4,10 @@ Security middleware for Mini App API
 
 import time
 
-import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+import structlog
+
 
 logger = structlog.get_logger()
 
