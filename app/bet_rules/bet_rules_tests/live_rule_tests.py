@@ -4,7 +4,7 @@ from app.bet_rules.structures import (
     BetOutcome,
     BetType,
     LiveMatchRedCardRule,
-    MatchResult,
+    MatchSummary,
 )
 from app.bet_rules.team_analysis import Team, TeamAnalysis
 
@@ -436,51 +436,66 @@ def test_live_match_red_card_rule_outcome_determination():
     rule = LiveMatchRedCardRule()
 
     # Test home team win (we bet on home team)
-    match_result = MatchResult(
-        home_score=2,
-        away_score=1,
+    match_result = MatchSummary(
+        match_id=None,
         home_team='Home Team',
         away_team='Away Team',
-        team_analyzed='Home Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
+        home_score=2,
+        away_score=1,
     )
-    assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
+    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
 
     # Test home team loss (we bet on home team)
-    match_result = MatchResult(
-        home_score=1,
-        away_score=2,
+    match_result = MatchSummary(
+        match_id=None,
         home_team='Home Team',
         away_team='Away Team',
-        team_analyzed='Home Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
+        home_score=1,
+        away_score=2,
     )
-    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
+    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE.value
 
     # Test away team win (we bet on away team)
-    match_result = MatchResult(
+    match_result = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=2,
-        home_team='Home Team',
-        away_team='Away Team',
-        team_analyzed='Away Team',
     )
-    assert rule.determine_outcome(match_result) == BetOutcome.WIN.value
+    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN.value
 
     # Test away team loss (we bet on away team)
-    match_result = MatchResult(
+    match_result = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=2,
         away_score=1,
-        home_team='Home Team',
-        away_team='Away Team',
-        team_analyzed='Away Team',
     )
-    assert rule.determine_outcome(match_result) == BetOutcome.LOSE.value
+    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.LOSE.value
 
     # Test incomplete match
-    match_result = MatchResult(
-        home_score=None,
-        away_score=None,
+    match_result = MatchSummary(
+        match_id=None,
         home_team='Home Team',
         away_team='Away Team',
-        team_analyzed='Home Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
+        home_score=None,
+        away_score=None,
     )
-    assert rule.determine_outcome(match_result) is None
+    assert rule.determine_outcome(match_result, 'Home Team') is None

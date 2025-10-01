@@ -32,28 +32,6 @@ class OpportunityType(str, Enum):
     LIVE_OPPORTUNITY = 'live_opportunity'
 
 
-class MatchResult(BaseModel):
-    """Match result information for outcome determination"""
-
-    home_score: int | None = Field(description='Home team score')
-    away_score: int | None = Field(description='Away team score')
-    home_team: str = Field(description='Home team name')
-    away_team: str = Field(description='Away team name')
-    team_analyzed: str = Field(description='Team that was analyzed for the bet')
-
-    @property
-    def result_type(self) -> str:
-        """Determine the match result type"""
-        if self.home_score is None or self.away_score is None:
-            return 'incomplete'
-        elif self.home_score > self.away_score:
-            return 'home_win'
-        elif self.away_score > self.home_score:
-            return 'away_win'
-        else:
-            return 'draw'
-
-
 class BettingRule(BaseModel):
     """Base betting rule model"""
 
@@ -75,7 +53,9 @@ class BettingRule(BaseModel):
         """Calculate confidence based on team analysis"""
         raise NotImplementedError('Subclasses must implement calculate_confidence')
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(
+        self, match_result: 'MatchSummary', team_analyzed: str
+    ) -> str | None:
         """Determine if the bet was won or lost based on match result"""
         raise NotImplementedError('Subclasses must implement determine_outcome')
 
@@ -135,20 +115,13 @@ class BettingRule(BaseModel):
         }
 
         return Bet(
-            match_id=match.id,
-            home_team=match.home_team.name,
-            away_team=match.away_team.name,
-            league=match.league.name,
-            country=match.league.country,
-            match_date=(
-                match.match_date.strftime('%Y-%m-%d %H:%M')
-                if match.match_date
-                else None
+            match=MatchSummary.from_match(match),
+            opportunity=BettingOpportunity(
+                slug=self.slug,
+                confidence=final_confidence,
+                team_analyzed=team_analyzed,
+                details=details,
             ),
-            slug=self.slug,
-            confidence=final_confidence,
-            team_analyzed=team_analyzed,
-            details=details,
         )
 
     def _calculate_base_confidence(self, team_analysis: TeamAnalysis) -> float:
@@ -205,20 +178,22 @@ class ConsecutiveLossesRule(BettingRule):
                 confidence = min(1.0, confidence)  # Cap at 1.0
         return confidence
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(
+        self, match_result: 'MatchSummary', team_analyzed: str
+    ) -> str | None:
         """Determine outcome for consecutive losses rule (draw_or_win)"""
 
         # Check if match is incomplete
         if match_result.result_type == 'incomplete':
             return None
 
-        if match_result.team_analyzed == match_result.home_team:
+        if team_analyzed == match_result.home_team:
             # Home team is the one with consecutive losses
             if match_result.result_type in ['home_win', 'draw']:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
-        elif match_result.team_analyzed == match_result.away_team:
+        elif team_analyzed == match_result.away_team:
             # Away team is the one with consecutive losses
             if match_result.result_type in ['away_win', 'draw']:
                 return BetOutcome.WIN.value
@@ -254,20 +229,22 @@ class ConsecutiveDrawsRule(BettingRule):
 
         return self._calculate_base_confidence(team_analysis)
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(
+        self, match_result: 'MatchSummary', team_analyzed: str
+    ) -> str | None:
         """Determine outcome for consecutive draws rule (win_or_lose)"""
         # Check if match is incomplete
         if match_result.result_type == 'incomplete':
             return None
 
-        if match_result.team_analyzed == match_result.home_team:
+        if team_analyzed == match_result.home_team:
             # Home team is the one with consecutive draws
             # For win_or_lose bet: win if home team wins OR loses (not draw)
             if match_result.result_type in ['home_win', 'away_win']:
                 return BetOutcome.WIN.value
             else:  # draw
                 return BetOutcome.LOSE.value
-        elif match_result.team_analyzed == match_result.away_team:
+        elif team_analyzed == match_result.away_team:
             # Away team is the one with consecutive draws
             # For win_or_lose bet: win if away team wins OR loses (not draw)
             if match_result.result_type in ['home_win', 'away_win']:
@@ -304,19 +281,21 @@ class Top5ConsecutiveLossesRule(BettingRule):
 
         return self._calculate_base_confidence(team_analysis)
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
+    def determine_outcome(
+        self, match_result: 'MatchSummary', team_analyzed: str
+    ) -> str | None:
         """Determine outcome for top-5 consecutive losses rule (draw_or_win)"""
         # Check if match is incomplete
         if match_result.result_type == 'incomplete':
             return None
 
-        if match_result.team_analyzed == match_result.home_team:
+        if team_analyzed == match_result.home_team:
             # Home team is the top-5 team with consecutive losses
             if match_result.result_type in ['home_win', 'draw']:
                 return BetOutcome.WIN.value
             else:
                 return BetOutcome.LOSE.value
-        elif match_result.team_analyzed == match_result.away_team:
+        elif team_analyzed == match_result.away_team:
             # Away team is the top-5 team with consecutive losses
             if match_result.result_type in ['away_win', 'draw']:
                 return BetOutcome.WIN.value
@@ -440,6 +419,68 @@ class LiveMatchRedCardRule(BettingRule):
         }
 
         return Bet(
+            match=MatchSummary.from_match(match),
+            opportunity=BettingOpportunity(
+                slug=self.slug,
+                confidence=confidence,
+                team_analyzed=team_analyzed,
+                details=details,
+            ),
+        )
+
+    def determine_outcome(
+        self, match_result: 'MatchSummary', team_analyzed: str
+    ) -> str | None:
+        """Determine outcome for live red card rule (win)"""
+        # Check if match is incomplete
+        if match_result.result_type == 'incomplete':
+            return None
+
+        # For live red card rule, we bet on the team without red card to win
+        if team_analyzed == match_result.home_team:
+            # We bet on home team to win
+            if match_result.result_type == 'home_win':
+                return BetOutcome.WIN.value
+            else:
+                return BetOutcome.LOSE.value
+        elif team_analyzed == match_result.away_team:
+            # We bet on away team to win
+            if match_result.result_type == 'away_win':
+                return BetOutcome.WIN.value
+            else:
+                return BetOutcome.LOSE.value
+        else:
+            return None
+
+
+class MatchSummary(BaseModel):
+    """Comprehensive match information for betting contexts and outcome determination"""
+
+    match_id: int | None = Field(default=None, description='Match ID')
+    home_team: str = Field(description='Home team name')
+    away_team: str = Field(description='Away team name')
+    league: str = Field(description='League name')
+    country: str = Field(description='Country name')
+    match_date: str | None = Field(default=None, description='Match date and time')
+    home_score: int | None = Field(default=None, description='Home team score')
+    away_score: int | None = Field(default=None, description='Away team score')
+
+    @property
+    def result_type(self) -> str:
+        """Determine the match result type"""
+        if self.home_score is None or self.away_score is None:
+            return 'incomplete'
+        elif self.home_score > self.away_score:
+            return 'home_win'
+        elif self.away_score > self.home_score:
+            return 'away_win'
+        else:
+            return 'draw'
+
+    @classmethod
+    def from_match(cls, match: 'Match') -> 'MatchSummary':
+        """Create MatchSummary from Match database model"""
+        return cls(
             match_id=match.id,
             home_team=match.home_team.name,
             away_team=match.away_team.name,
@@ -450,44 +491,14 @@ class LiveMatchRedCardRule(BettingRule):
                 if match.match_date
                 else None
             ),
-            slug=self.slug,
-            confidence=confidence,
-            team_analyzed=team_analyzed,
-            details=details,
+            home_score=match.home_score,
+            away_score=match.away_score,
         )
 
-    def determine_outcome(self, match_result: 'MatchResult') -> str | None:
-        """Determine outcome for live red card rule (win)"""
-        # Check if match is incomplete
-        if match_result.result_type == 'incomplete':
-            return None
 
-        # For live red card rule, we bet on the team without red card to win
-        if match_result.team_analyzed == match_result.home_team:
-            # We bet on home team to win
-            if match_result.result_type == 'home_win':
-                return BetOutcome.WIN.value
-            else:
-                return BetOutcome.LOSE.value
-        elif match_result.team_analyzed == match_result.away_team:
-            # We bet on away team to win
-            if match_result.result_type == 'away_win':
-                return BetOutcome.WIN.value
-            else:
-                return BetOutcome.LOSE.value
-        else:
-            return None
+class BettingOpportunity(BaseModel):
+    """Pure betting opportunity data without match information"""
 
-
-class Bet(BaseModel):
-    """Betting opportunity result"""
-
-    match_id: int | None = Field(default=None, description='Match ID')
-    home_team: str = Field(description='Home team name')
-    away_team: str = Field(description='Away team name')
-    league: str = Field(description='League name')
-    country: str = Field(description='Country name')
-    match_date: str | None = Field(default=None, description='Match date and time')
     slug: str = Field(description='Rule slug identifier')
     confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
     team_analyzed: str = Field(description='Team that was analyzed')
@@ -520,3 +531,98 @@ class Bet(BaseModel):
         """Get opportunity type from the rule"""
         rule = self.rule
         return rule.opportunity_type if rule else OpportunityType.HISTORICAL_ANALYSIS
+
+
+class Bet(BaseModel):
+    """Combined betting opportunity with match information for backward compatibility"""
+
+    match: MatchSummary = Field(description='Match information')
+    opportunity: BettingOpportunity = Field(description='Betting opportunity data')
+
+    # Backward compatibility properties
+    @property
+    def match_id(self) -> int | None:
+        return self.match.match_id
+
+    @property
+    def home_team(self) -> str:
+        return self.match.home_team
+
+    @property
+    def away_team(self) -> str:
+        return self.match.away_team
+
+    @property
+    def league(self) -> str:
+        return self.match.league
+
+    @property
+    def country(self) -> str:
+        return self.match.country
+
+    @property
+    def match_date(self) -> str | None:
+        return self.match.match_date
+
+    @property
+    def slug(self) -> str:
+        return self.opportunity.slug
+
+    @property
+    def confidence(self) -> float:
+        return self.opportunity.confidence
+
+    @property
+    def team_analyzed(self) -> str:
+        return self.opportunity.team_analyzed
+
+    @property
+    def details(self) -> dict[str, Any]:
+        return self.opportunity.details
+
+    @property
+    def rule(self) -> 'BettingRule | None':
+        return self.opportunity.rule
+
+    @property
+    def rule_name(self) -> str:
+        return self.opportunity.rule_name
+
+    @property
+    def bet_type(self) -> BetType:
+        return self.opportunity.bet_type
+
+    @property
+    def opportunity_type(self) -> OpportunityType:
+        return self.opportunity.opportunity_type
+
+    @classmethod
+    def from_legacy_data(
+        cls,
+        match_id: int | None,
+        home_team: str,
+        away_team: str,
+        league: str,
+        country: str,
+        match_date: str | None,
+        slug: str,
+        confidence: float,
+        team_analyzed: str,
+        details: dict[str, Any],
+    ) -> 'Bet':
+        """Create Bet from legacy flat structure for backward compatibility"""
+        match = MatchSummary(
+            match_id=match_id,
+            home_team=home_team,
+            away_team=away_team,
+            league=league,
+            country=country,
+            match_date=match_date,
+        )
+        opportunity = BettingOpportunity(
+            slug=slug,
+            confidence=confidence,
+            team_analyzed=team_analyzed,
+            details=details,
+        )
+        return cls(match=match, opportunity=opportunity)

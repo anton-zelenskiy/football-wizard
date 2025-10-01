@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 import structlog
 
-from app.bet_rules.structures import Bet, MatchResult
+from app.bet_rules.structures import Bet, MatchSummary
 from app.db.models import (
     BettingOpportunity,
     League,
@@ -347,23 +347,28 @@ class FootballDataStorage:
         # Get opportunity details
         details = opportunity.get_details()
         team_analyzed = details.get('team_analyzed', '')
-        slug = details.get('slug', '')
 
-        # Create MatchResult DTO
-        match_result = MatchResult(
-            home_score=match.home_score,
-            away_score=match.away_score,
+        match_result = MatchSummary(
+            match_id=match.id,
             home_team=match.home_team.name,
             away_team=match.away_team.name,
-            team_analyzed=team_analyzed,
+            league=match.league.name,
+            country=match.league.country,
+            match_date=(
+                match.match_date.strftime('%Y-%m-%d %H:%M')
+                if match.match_date
+                else None
+            ),
+            home_score=match.home_score,
+            away_score=match.away_score,
         )
 
         # Get the appropriate rule by type and determine outcome
         engine = BettingRulesEngine()
-        rule = engine.get_rule_by_slug(slug)
+        rule = engine.get_rule_by_slug(opportunity.rule_slug)
 
         if rule:
-            return rule.determine_outcome(match_result)
+            return rule.determine_outcome(match_result, team_analyzed)
 
         # Default: unable to determine outcome
         return None
