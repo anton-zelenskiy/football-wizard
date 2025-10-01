@@ -36,10 +36,10 @@ class BettingRulesEngine:
         ]
         self.live_rule = LiveMatchRedCardRule()
 
-    def get_rule_by_type(self, rule_type: str) -> BettingRule | None:
-        """Get a rule by its type"""
+    def get_rule_by_slug(self, slug: str) -> BettingRule | None:
+        """Get a rule by its slug"""
         for rule in self.rules:
-            if rule.rule_type == rule_type:
+            if rule.slug == slug:
                 return rule
         return None
 

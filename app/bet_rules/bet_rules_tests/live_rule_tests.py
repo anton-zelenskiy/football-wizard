@@ -18,7 +18,7 @@ def test_live_match_red_card_rule_creation():
         rule.description
         == 'Live match with red card and draw -> bet on team without red card'
     )
-    assert rule.rule_type == 'live_red_card'
+    assert rule.slug == 'live_red_card'
     assert rule.bet_type == BetType.WIN
     assert rule.base_confidence == 0.5
 

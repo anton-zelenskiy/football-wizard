@@ -52,7 +52,7 @@ class BettingRule(BaseModel):
 
     name: str = Field(description='Rule name')
     description: str = Field(description='Rule description')
-    rule_type: str = Field(description='Rule type identifier')
+    slug: str = Field(description='Rule type identifier')
     bet_type: BetType = Field(description='Expected bet type')
     base_confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description='Base confidence level'
@@ -90,9 +90,8 @@ class BettingRule(BaseModel):
 
         home_fits = home_confidence > 0
         away_fits = away_confidence > 0
-        both_fit = home_fits and away_fits
 
-        if both_fit:
+        if home_fits and away_fits:
             # When both teams fit, pick the one with higher confidence
             if home_confidence >= away_confidence:
                 final_confidence = home_confidence
@@ -110,7 +109,6 @@ class BettingRule(BaseModel):
         details: dict[str, Any] = {
             'home_team_fits': home_fits,
             'away_team_fits': away_fits,
-            'both_teams_fit': both_fit,
             'home_confidence': home_confidence,
             'away_confidence': away_confidence,
             'home_team_rank': home_team_analysis.team.rank,
@@ -137,7 +135,7 @@ class BettingRule(BaseModel):
                 else None
             ),
             rule_name=self.name,
-            rule_type=self.rule_type,
+            slug=self.slug,
             bet_type=self.bet_type,
             confidence=final_confidence,
             team_analyzed=team_analyzed,
@@ -170,7 +168,7 @@ class ConsecutiveLossesRule(BettingRule):
         super().__init__(
             name='Consecutive Losses Rule',
             description='Team with >= 3 consecutive losses -> draw_or_win',
-            rule_type='consecutive_losses',
+            slug='consecutive_losses',
             bet_type=BetType.DRAW_OR_WIN,
             base_confidence=0.5,
             **data,
@@ -233,7 +231,7 @@ class ConsecutiveDrawsRule(BettingRule):
         super().__init__(
             name='Consecutive Draws Rule',
             description='Team with >= 3 consecutive draws -> win_or_lose',
-            rule_type='consecutive_draws',
+            slug='consecutive_draws',
             bet_type=BetType.WIN_OR_LOSE,
             base_confidence=0.5,
             **data,
@@ -283,7 +281,7 @@ class Top5ConsecutiveLossesRule(BettingRule):
         super().__init__(
             name='Top 5 Consecutive Losses Rule',
             description='Top 5 team with >= 2 consecutive losses -> draw_or_win',
-            rule_type='top5_consecutive_losses',
+            slug='top5_consecutive_losses',
             bet_type=BetType.DRAW_OR_WIN,
             base_confidence=0.5,
             **data,
@@ -331,7 +329,7 @@ class LiveMatchRedCardRule(BettingRule):
         super().__init__(
             name='Live Match Red Card Rule',
             description='Live match with red card and draw -> bet on team without red card',
-            rule_type='live_red_card',
+            slug='live_red_card',
             bet_type=BetType.WIN,
             base_confidence=0.5,
             **data,
@@ -444,7 +442,7 @@ class LiveMatchRedCardRule(BettingRule):
                 else None
             ),
             rule_name=self.name,
-            rule_type=self.rule_type,
+            slug=self.slug,
             bet_type=self.bet_type,
             confidence=confidence,
             team_analyzed=team_analyzed,
@@ -485,7 +483,7 @@ class Bet(BaseModel):
     country: str = Field(description='Country name')
     match_date: str | None = Field(default=None, description='Match date and time')
     rule_name: str = Field(description='Rule that triggered the opportunity')
-    rule_type: str = Field(description='Rule type identifier')
+    slug: str = Field(description='Rule type identifier')
     bet_type: BetType = Field(description='Recommended bet type')
     confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
     team_analyzed: str = Field(description='Team that was analyzed')

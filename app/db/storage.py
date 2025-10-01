@@ -291,9 +291,9 @@ class FootballDataStorage:
         # Use opportunity_type from Bet class
         opportunity_type = opportunity.opportunity_type
 
-        # Add rule_type to details for outcome determination
+        # Add slug to details for outcome determination
         details = opportunity.details.copy()
-        details['rule_type'] = opportunity.rule_type
+        details['slug'] = opportunity.slug
         details['team_analyzed'] = opportunity.team_analyzed
 
         # Check for existing opportunity to prevent duplicates
@@ -307,7 +307,7 @@ class FootballDataStorage:
         db_opportunity = BettingOpportunity(
             match=match,
             opportunity_type=opportunity_type,
-            rule_triggered=opportunity.rule_name,
+            rule_triggered=opportunity.slug,
             confidence_score=opportunity.confidence,
         )
         db_opportunity.set_details(details)
@@ -332,7 +332,7 @@ class FootballDataStorage:
                 BettingOpportunity.select()
                 .where(
                     BettingOpportunity.match == opportunity.match_id,
-                    BettingOpportunity.rule_triggered == opportunity.rule_name,
+                    BettingOpportunity.rule_triggered == opportunity.slug,
                     BettingOpportunity.opportunity_type == opportunity.opportunity_type,
                     BettingOpportunity.outcome.is_null(),
                 )
@@ -354,7 +354,7 @@ class FootballDataStorage:
         # Get opportunity details
         details = opportunity.get_details()
         team_analyzed = details.get('team_analyzed', '')
-        rule_type = details.get('rule_type', '')
+        slug = details.get('slug', '')
 
         # Create MatchResult DTO
         match_result = MatchResult(
@@ -367,7 +367,7 @@ class FootballDataStorage:
 
         # Get the appropriate rule by type and determine outcome
         engine = BettingRulesEngine()
-        rule = engine.get_rule_by_type(rule_type)
+        rule = engine.get_rule_by_slug(slug)
 
         if rule:
             return rule.determine_outcome(match_result)

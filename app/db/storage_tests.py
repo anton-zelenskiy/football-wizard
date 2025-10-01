@@ -70,7 +70,7 @@ def test_save_opportunity_prevents_duplicates():
 
             opportunity = Bet(
                 rule_name='Test Rule',
-                rule_type='test_type',
+                slug='test_type',
                 team_analyzed='Test Team',
                 confidence=0.8,
                 match_id=1,
@@ -109,7 +109,7 @@ def test_save_opportunity_returns_existing_duplicate():
 
             opportunity = Bet(
                 rule_name='Test Rule',
-                rule_type='test_type',
+                slug='test_type',
                 team_analyzed='Test Team',
                 confidence=0.8,
                 match_id=1,
@@ -142,7 +142,7 @@ def test_find_existing_opportunity_with_match_id():
     # Create a Bet object with match_id
     opportunity = Bet(
         rule_name='Test Rule',
-        rule_type='test_type',
+        slug='test_type',
         team_analyzed='Test Team',
         confidence=0.8,
         match_id=1,
@@ -173,7 +173,7 @@ def test_find_existing_opportunity_without_match_id():
     # Create a Bet object without match_id
     opportunity = Bet(
         rule_name='Test Rule',
-        rule_type='test_type',
+        slug='test_type',
         team_analyzed='Test Team',
         confidence=0.8,
         match_id=None,
@@ -197,7 +197,7 @@ def test_find_existing_opportunity_returns_existing():
     # Create a Bet object with match_id
     opportunity = Bet(
         rule_name='Test Rule',
-        rule_type='test_type',
+        slug='test_type',
         team_analyzed='Test Team',
         confidence=0.8,
         match_id=1,

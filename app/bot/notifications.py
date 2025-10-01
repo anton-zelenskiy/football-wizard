@@ -90,7 +90,7 @@ def _format_opportunity_message(opportunity: Bet) -> str:
         f"{confidence_emoji} <b>Confidence: {opportunity.confidence:.1%}</b>\n\n"
         f"💡 <b>Bet Type:</b> {opportunity.bet_type.value.replace('_', ' ').title()}\n"
         f"🎯 <b>Team Analyzed:</b> {opportunity.team_analyzed}\n\n"
-        f"📊 Rule Type: {opportunity.rule_type.replace('_', ' ').title()}"
+        f"📊 Rule Type: {opportunity.slug.replace('_', ' ').title()}"
     )
 
     return message
