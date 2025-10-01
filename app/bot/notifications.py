@@ -215,7 +215,6 @@ def format_opportunities_message(opportunities: list) -> str:
             f"   🎯 Team Analyzed: {team_analyzed}\n"
             f"   📊 Confidence: {opp.confidence_score:.1%}\n"
             f"   🏟️ Type: {opp.opportunity_type.replace('_', ' ').title()}\n"
-            f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
         )
 
     message += 'Use /settings to adjust your notification preferences.'

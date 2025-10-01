@@ -71,15 +71,19 @@ class BettingRule(BaseModel):
     def evaluate_opportunity(
         self,
         match: Match,
-        home_analysis: TeamAnalysis,
-        away_analysis: TeamAnalysis,
+        home_team_analysis: TeamAnalysis,
+        away_team_analysis: TeamAnalysis,
     ) -> 'Bet | None':
         """Default evaluation for rules based on historical analysis.
 
         Subclasses can override for special live rules.
         """
-        home_confidence = self.calculate_confidence(home_analysis, away_analysis)
-        away_confidence = self.calculate_confidence(away_analysis, home_analysis)
+        home_confidence = self.calculate_confidence(
+            home_team_analysis, away_team_analysis
+        )
+        away_confidence = self.calculate_confidence(
+            away_team_analysis, home_team_analysis
+        )
 
         if home_confidence == 0 and away_confidence == 0:
             return None
@@ -89,17 +93,19 @@ class BettingRule(BaseModel):
         both_fit = home_fits and away_fits
 
         if both_fit:
-            final_confidence = (home_confidence + away_confidence) / 2
-            team_analyzed = f'{match.home_team.name} & {match.away_team.name}'
-            uncertainty_note = 'Both teams fit rule - high uncertainty'
+            # When both teams fit, pick the one with higher confidence
+            if home_confidence >= away_confidence:
+                final_confidence = home_confidence
+                team_analyzed = match.home_team.name
+            else:
+                final_confidence = away_confidence
+                team_analyzed = match.away_team.name
         elif home_fits:
             final_confidence = home_confidence
             team_analyzed = match.home_team.name
-            uncertainty_note = None
         else:
             final_confidence = away_confidence
             team_analyzed = match.away_team.name
-            uncertainty_note = None
 
         details: dict[str, Any] = {
             'home_team_fits': home_fits,
@@ -107,20 +113,17 @@ class BettingRule(BaseModel):
             'both_teams_fit': both_fit,
             'home_confidence': home_confidence,
             'away_confidence': away_confidence,
-            'home_team_rank': home_analysis.team.rank,
-            'away_team_rank': away_analysis.team.rank,
-            'home_consecutive_losses': home_analysis.consecutive_losses,
-            'away_consecutive_losses': away_analysis.consecutive_losses,
-            'home_consecutive_draws': home_analysis.consecutive_draws,
-            'away_consecutive_draws': away_analysis.consecutive_draws,
-            'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
-            'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
-            'home_is_top_5': home_analysis.is_top5_team,
-            'away_is_top_5': away_analysis.is_top5_team,
+            'home_team_rank': home_team_analysis.team.rank,
+            'away_team_rank': away_team_analysis.team.rank,
+            'home_consecutive_losses': home_team_analysis.consecutive_losses,
+            'away_consecutive_losses': away_team_analysis.consecutive_losses,
+            'home_consecutive_draws': home_team_analysis.consecutive_draws,
+            'away_consecutive_draws': away_team_analysis.consecutive_draws,
+            'home_consecutive_no_goals': home_team_analysis.consecutive_no_goals,
+            'away_consecutive_no_goals': away_team_analysis.consecutive_no_goals,
+            'home_is_top_5': home_team_analysis.is_top5_team,
+            'away_is_top_5': away_team_analysis.is_top5_team,
         }
-
-        if uncertainty_note:
-            details['uncertainty_note'] = uncertainty_note
 
         return Bet(
             match_id=match.id,

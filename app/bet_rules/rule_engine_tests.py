@@ -144,15 +144,13 @@ def test_analyze_scheduled_matches_both_teams_fit_same_rule(mock_storage):
         assert opportunity.away_team == 'Away Team'
         assert opportunity.rule_name == 'Consecutive Draws Rule'
         assert opportunity.bet_type == BetType.WIN_OR_LOSE
-        assert opportunity.team_analyzed == 'Home Team & Away Team'
+        # With new logic, should pick the team with higher confidence
+        # Home team (rank 5) should have higher confidence than away team (rank 8)
+        assert opportunity.team_analyzed == 'Home Team'
         assert opportunity.details['home_team_fits'] is True
         assert opportunity.details['away_team_fits'] is True
         assert opportunity.details['both_teams_fit'] is True
-        assert 'uncertainty_note' in opportunity.details
-        assert (
-            opportunity.details['uncertainty_note']
-            == 'Both teams fit rule - high uncertainty'
-        )
+        assert 'uncertainty_note' not in opportunity.details
 
 
 def test_check_rule_for_match_single_team_fits():
@@ -192,12 +190,10 @@ def test_check_rule_for_match_both_teams_fit():
     )
 
     assert opportunity is not None
-    assert opportunity.team_analyzed == 'Home Team & Away Team'
+    # With new logic, should pick the team with higher confidence
+    # Home team (rank 5) should have higher confidence than away team (rank 8)
+    assert opportunity.team_analyzed == 'Home Team'
     assert opportunity.details['home_team_fits'] is True
     assert opportunity.details['away_team_fits'] is True
     assert opportunity.details['both_teams_fit'] is True
-    assert 'uncertainty_note' in opportunity.details
-    assert (
-        opportunity.details['uncertainty_note']
-        == 'Both teams fit rule - high uncertainty'
-    )
+    assert 'uncertainty_note' not in opportunity.details
