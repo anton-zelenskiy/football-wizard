@@ -25,7 +25,7 @@ router = APIRouter()
 storage = FootballDataStorage()
 
 
-@router.get("/betting-opportunities")
+@router.get('/betting-opportunities')
 async def get_betting_opportunities(
     request: Request,
     webapp_data: TelegramWebAppData | None = None,
@@ -42,13 +42,13 @@ async def get_betting_opportunities(
 
         if debug_mode and webapp_data is None:
             # Debug mode: no authentication required
-            logger.info("Debug mode: Skipping authentication for betting opportunities")
+            logger.info('Debug mode: Skipping authentication for betting opportunities')
             client_ip = get_client_ip(request)
-            logger.info(f"Debug API access: ip={client_ip}")
+            logger.info(f'Debug API access: ip={client_ip}')
         else:
             # Production mode or authenticated debug mode: full authentication
             if webapp_data is None:
-                raise HTTPException(status_code=401, detail="Authentication required")
+                raise HTTPException(status_code=401, detail='Authentication required')
 
             validate_request_origin(request)
             check_rate_limit(webapp_data.user_id)
@@ -56,8 +56,8 @@ async def get_betting_opportunities(
             # Log access
             client_ip = get_client_ip(request)
             logger.info(
-                f"Mini App API access: user_id={webapp_data.user_id}, "
-                f"ip={client_ip}, username={webapp_data.username}"
+                f'Mini App API access: user_id={webapp_data.user_id}, '
+                f'ip={client_ip}, username={webapp_data.username}'
             )
 
         opportunities = storage.get_active_betting_opportunities()
@@ -68,57 +68,57 @@ async def get_betting_opportunities(
             details = opp.get_details()
 
             opportunity_data = {
-                "id": opp.id,
-                "rule_triggered": opp.rule_triggered,
-                "confidence_score": opp.confidence_score,
-                "outcome": opp.outcome,
-                "created_at": opp.created_at.isoformat(),
-                "details": details,
+                'id': opp.id,
+                'rule_slug': opp.rule_slug,
+                'confidence_score': opp.confidence_score,
+                'outcome': opp.outcome,
+                'created_at': opp.created_at.isoformat(),
+                'details': details,
             }
 
             if match:
-                opportunity_data["match"] = {
-                    "id": match.id,
-                    "home_team": {
-                        "id": match.home_team.id,
-                        "name": match.home_team.name,
-                        "rank": match.home_team.rank,
+                opportunity_data['match'] = {
+                    'id': match.id,
+                    'home_team': {
+                        'id': match.home_team.id,
+                        'name': match.home_team.name,
+                        'rank': match.home_team.rank,
                     },
-                    "away_team": {
-                        "id": match.away_team.id,
-                        "name": match.away_team.name,
-                        "rank": match.away_team.rank,
+                    'away_team': {
+                        'id': match.away_team.id,
+                        'name': match.away_team.name,
+                        'rank': match.away_team.rank,
                     },
-                    "league": {
-                        "id": match.league.id,
-                        "name": match.league.name,
-                        "country": match.league.country,
+                    'league': {
+                        'id': match.league.id,
+                        'name': match.league.name,
+                        'country': match.league.country,
                     },
-                    "home_score": match.home_score,
-                    "away_score": match.away_score,
-                    "match_date": match.match_date.isoformat(),
-                    "status": match.status,
-                    "minute": match.minute,
-                    "red_cards_home": match.red_cards_home,
-                    "red_cards_away": match.red_cards_away,
+                    'home_score': match.home_score,
+                    'away_score': match.away_score,
+                    'match_date': match.match_date.isoformat(),
+                    'status': match.status,
+                    'minute': match.minute,
+                    'red_cards_home': match.red_cards_home,
+                    'red_cards_away': match.red_cards_away,
                 }
             else:
-                opportunity_data["match"] = None
+                opportunity_data['match'] = None
 
             result.append(opportunity_data)
 
-        return {"success": True, "data": result, "count": len(result)}
+        return {'success': True, 'data': result, 'count': len(result)}
 
     except HTTPException as e:
         # Re-raise HTTP exceptions (like 401, 429) to preserve status codes
-        logger.error(f"HTTP error in betting opportunities: {e.detail}")
+        logger.error(f'HTTP error in betting opportunities: {e.detail}')
         raise e
     except Exception as e:
-        logger.error(f"Error getting betting opportunities: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        logger.error(f'Error getting betting opportunities: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error') from e
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get('/', response_class=HTMLResponse)
 async def mini_app_index():
     """Serve the Mini App HTML page"""
     html_content = """
@@ -471,7 +471,7 @@ async def mini_app_index():
 
                 card.innerHTML = `
                     <div class="opportunity-header">
-                        <div class="rule-name">${opportunity.rule_triggered}</div>
+                        <div class="rule-name">${opportunity.rule_slug}</div>
                         <div class="confidence-badge">${confidencePercent}%</div>
                     </div>
                     ${matchInfo}

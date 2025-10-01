@@ -261,7 +261,7 @@ class FootballDataStorage:
 
         updated_count = 0
         for opportunity in pending_opportunities:
-            logger.info(f'Processing opportunity: {opportunity.rule_triggered}')
+            logger.info(f'Processing opportunity: {opportunity.rule_slug}')
             match = opportunity.match
 
             # Determine outcome based on the betting rule
@@ -271,7 +271,7 @@ class FootballDataStorage:
                 opportunity.save()
                 updated_count += 1
                 logger.info(
-                    f'Updated betting outcome: {opportunity.rule_triggered} -> {outcome} '
+                    f'Updated betting outcome: {opportunity.rule_slug} -> {outcome} '
                     f'for match {match.home_team.name} vs {match.away_team.name}'
                 )
 
@@ -303,7 +303,7 @@ class FootballDataStorage:
         # Create new opportunity
         db_opportunity = BettingOpportunity(
             match=match,
-            rule_triggered=opportunity.slug,
+            rule_slug=opportunity.slug,
             confidence_score=opportunity.confidence,
         )
         db_opportunity.set_details(details)
@@ -318,17 +318,16 @@ class FootballDataStorage:
     def _find_existing_opportunity(
         self, opportunity: 'Bet'
     ) -> BettingOpportunity | None:
-        """Find existing betting opportunity by match_id, rule, and opportunity_type"""
+        """Find existing betting opportunity by match_id, rule"""
         try:
             if not opportunity.match_id:
                 return None
 
-            # Look for existing opportunity with same match, rule, and opportunity type
             existing = (
                 BettingOpportunity.select()
                 .where(
                     BettingOpportunity.match == opportunity.match_id,
-                    BettingOpportunity.rule_triggered == opportunity.slug,
+                    BettingOpportunity.rule_slug == opportunity.slug,
                     BettingOpportunity.outcome.is_null(),
                 )
                 .first()

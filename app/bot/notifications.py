@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 
 from app.bet_rules.structures import Bet
+from app.db.models import BettingOpportunity
 from app.db.storage import FootballDataStorage
 
 
@@ -171,7 +172,7 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
     return message
 
 
-def format_opportunities_message(opportunities: list) -> str:
+def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str:
     """Format betting opportunities message for display"""
     if not opportunities:
         return (
@@ -210,7 +211,7 @@ def format_opportunities_message(opportunities: list) -> str:
         team_analyzed = details.get('team_analyzed', 'Unknown')
 
         message += (
-            f"{i}. {confidence_emoji} <b>{opp.rule_triggered}</b>\n"
+            f"{i}. {confidence_emoji} <b>{opp.rule_slug}</b>\n"
             f"   {match_info}\n"
             f"   🎯 Team Analyzed: {team_analyzed}\n"
             f"   📊 Confidence: {opp.confidence_score:.1%}\n"
@@ -223,7 +224,7 @@ def format_opportunities_message(opportunities: list) -> str:
 
 
 def format_completed_opportunities_message(
-    opportunities: list, statistics: dict
+    opportunities: list[BettingOpportunity], statistics: dict
 ) -> str:
     """Format completed betting opportunities message with statistics"""
     if not opportunities:
@@ -281,7 +282,7 @@ def format_completed_opportunities_message(
         team_analyzed = details.get('team_analyzed', 'Unknown')
 
         message += (
-            f"{i}. {outcome_emoji} <b>{opp.rule_triggered}</b>\n"
+            f"{i}. {outcome_emoji} <b>{opp.rule_slug}</b>\n"
             f"   {match_info}\n"
             f"   🎯 Team Analyzed: {team_analyzed}\n"
             f"   {confidence_emoji} Confidence: {opp.confidence_score:.1%}\n"

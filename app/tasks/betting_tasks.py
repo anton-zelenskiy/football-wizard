@@ -129,7 +129,6 @@ class BettingTasks:
 
         for opp in opportunities:
             try:
-                # Check if this opportunity already exists (by match_id, rule, and opportunity_type)
                 existing_opportunity = self.storage._find_existing_opportunity(opp)
 
                 if existing_opportunity:

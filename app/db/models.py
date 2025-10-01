@@ -81,7 +81,7 @@ class Match(BaseModel):
 class BettingOpportunity(BaseModel):
     id = AutoField()
     match = ForeignKeyField(Match, backref='betting_opportunities', null=True)
-    rule_triggered = CharField()  # Which betting rule was triggered
+    rule_slug = CharField()  # Which betting rule slug was triggered
     confidence_score = FloatField(default=0.0)  # 0.0 to 1.0
     details = TextField()  # JSON string with additional details
     outcome = CharField(null=True)  # win, lose, pending, cancelled
