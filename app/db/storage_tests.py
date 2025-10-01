@@ -69,7 +69,6 @@ def test_save_opportunity_prevents_duplicates():
             mock_find.return_value = None
 
             opportunity = Bet(
-                rule_name='Test Rule',
                 slug='test_type',
                 team_analyzed='Test Team',
                 confidence=0.8,
@@ -78,7 +77,6 @@ def test_save_opportunity_prevents_duplicates():
                 away_team='Away Team',
                 league='Test League',
                 country='Test Country',
-                bet_type=BetType.WIN,
                 details={},
             )
 
@@ -108,7 +106,6 @@ def test_save_opportunity_returns_existing_duplicate():
             mock_find.return_value = existing_opportunity
 
             opportunity = Bet(
-                rule_name='Test Rule',
                 slug='test_type',
                 team_analyzed='Test Team',
                 confidence=0.8,
@@ -117,7 +114,6 @@ def test_save_opportunity_returns_existing_duplicate():
                 away_team='Away Team',
                 league='Test League',
                 country='Test Country',
-                bet_type=BetType.WIN,
                 details={},
             )
 

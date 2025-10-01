@@ -134,9 +134,7 @@ class BettingRule(BaseModel):
                 if match.match_date
                 else None
             ),
-            rule_name=self.name,
             slug=self.slug,
-            bet_type=self.bet_type,
             confidence=final_confidence,
             team_analyzed=team_analyzed,
             opportunity_type='historical_analysis',
@@ -441,9 +439,7 @@ class LiveMatchRedCardRule(BettingRule):
                 if match.match_date
                 else None
             ),
-            rule_name=self.name,
             slug=self.slug,
-            bet_type=self.bet_type,
             confidence=confidence,
             team_analyzed=team_analyzed,
             opportunity_type='live_opportunity',
@@ -482,9 +478,7 @@ class Bet(BaseModel):
     league: str = Field(description='League name')
     country: str = Field(description='Country name')
     match_date: str | None = Field(default=None, description='Match date and time')
-    rule_name: str = Field(description='Rule that triggered the opportunity')
-    slug: str = Field(description='Rule type identifier')
-    bet_type: BetType = Field(description='Recommended bet type')
+    slug: str = Field(description='Rule slug identifier')
     confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
     team_analyzed: str = Field(description='Team that was analyzed')
     opportunity_type: str = Field(
@@ -494,3 +488,23 @@ class Bet(BaseModel):
     details: dict[str, Any] = Field(
         default_factory=dict, description='Additional details'
     )
+
+    @property
+    def rule(self) -> 'BettingRule | None':
+        """Get the rule from the rule engine using slug"""
+        from app.bet_rules.rule_engine import BettingRulesEngine
+
+        engine = BettingRulesEngine()
+        return engine.get_rule_by_slug(self.slug)
+
+    @property
+    def rule_name(self) -> str:
+        """Get rule name from the rule"""
+        rule = self.rule
+        return rule.name if rule else 'Unknown Rule'
+
+    @property
+    def bet_type(self) -> BetType:
+        """Get bet type from the rule"""
+        rule = self.rule
+        return rule.bet_type if rule else BetType.WIN
