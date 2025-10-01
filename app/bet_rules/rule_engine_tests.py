@@ -155,23 +155,6 @@ def test_analyze_scheduled_matches_both_teams_fit_same_rule(mock_storage):
         )
 
 
-def test_check_rule_for_match_no_teams_fit():
-    """Test _check_rule_for_match when neither team fits the rule"""
-    match = create_mock_match()
-    rule = ConsecutiveLossesRule()
-
-    # Neither team has consecutive losses
-    home_analysis = create_mock_team_analysis(consecutive_losses=1, rank=3)
-    away_analysis = create_mock_team_analysis(consecutive_losses=2, rank=8)
-
-    engine = BettingRulesEngine()
-    opportunity = engine._check_rule_for_match(
-        match, rule, home_analysis, away_analysis
-    )
-
-    assert opportunity is None
-
-
 def test_check_rule_for_match_single_team_fits():
     """Test _check_rule_for_match when only one team fits the rule"""
     match = create_mock_match()

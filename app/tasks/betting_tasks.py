@@ -20,13 +20,27 @@ class BettingTasks:
         try:
             logger.info('Starting daily scheduled matches analysis')
 
-            # Analyze scheduled matches for betting opportunities
-            opportunities = self.rules_engine.analyze_scheduled_matches()
+            # Get scheduled matches and analyze each one
+            scheduled_matches = self.storage.get_scheduled_matches()
+            all_opportunities = []
 
-            if opportunities:
+            for match in scheduled_matches:
+                try:
+                    # Analyze the match
+                    match_opportunities = self.rules_engine.analyze_match(match)
+                    all_opportunities.extend(match_opportunities)
+
+                except Exception as e:
+                    logger.error(
+                        f'Error analyzing scheduled match {match.home_team.name} vs '
+                        f'{match.away_team.name}',
+                        error=str(e),
+                    )
+
+            if all_opportunities:
                 # Save opportunities to database iteratively (with duplicate prevention)
                 saved_opportunities = await self._save_opportunities_iteratively(
-                    opportunities
+                    all_opportunities
                 )
 
                 # Only send notifications for newly created opportunities
@@ -67,13 +81,26 @@ class BettingTasks:
                     )
                     logger.info(f'Saved {saved_count} live matches')
 
-            # Analyze live matches for betting opportunities
-            opportunities = self.rules_engine.analyze_live_matches()
+            # Get live matches and analyze each one
+            live_matches = self.storage.get_live_matches()
+            all_opportunities = []
 
-            if opportunities:
+            for match in live_matches:
+                try:
+                    # Analyze the live match
+                    match_opportunities = self.rules_engine.analyze_match(match)
+                    all_opportunities.extend(match_opportunities)
+
+                except Exception as e:
+                    logger.error(
+                        f'Error analyzing live match {match.home_team.name} vs {match.away_team.name}',
+                        error=str(e),
+                    )
+
+            if all_opportunities:
                 # Save opportunities to database iteratively
                 saved_opportunities = await self._save_opportunities_iteratively(
-                    opportunities
+                    all_opportunities
                 )
 
                 # Send immediate notifications for live opportunities
@@ -81,11 +108,9 @@ class BettingTasks:
                     await send_betting_opportunity(opp)
 
                 logger.info(
-                    f'Live analysis completed: {len(opportunities)} opportunities found'
+                    f'Live analysis completed: {len(all_opportunities)} opportunities found'
                 )
-                return (
-                    f'Live analysis completed: {len(opportunities)} opportunities found'
-                )
+                return f'Live analysis completed: {len(all_opportunities)} opportunities found'
             else:
                 logger.info('Live analysis completed: no opportunities found')
                 return 'Live analysis completed: no opportunities found'

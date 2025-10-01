@@ -4,6 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.bet_rules.team_analysis import TeamAnalysis
+from app.db.models import Match
 
 
 class BetType(str, Enum):
@@ -66,6 +67,80 @@ class BettingRule(BaseModel):
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
         """Determine if the bet was won or lost based on match result"""
         raise NotImplementedError('Subclasses must implement determine_outcome')
+
+    def evaluate_opportunity(
+        self,
+        match: Match,
+        home_analysis: TeamAnalysis,
+        away_analysis: TeamAnalysis,
+    ) -> 'Bet | None':
+        """Default evaluation for rules based on historical analysis.
+
+        Subclasses can override for special live rules.
+        """
+        home_confidence = self.calculate_confidence(home_analysis, away_analysis)
+        away_confidence = self.calculate_confidence(away_analysis, home_analysis)
+
+        if home_confidence == 0 and away_confidence == 0:
+            return None
+
+        home_fits = home_confidence > 0
+        away_fits = away_confidence > 0
+        both_fit = home_fits and away_fits
+
+        if both_fit:
+            final_confidence = (home_confidence + away_confidence) / 2
+            team_analyzed = f'{match.home_team.name} & {match.away_team.name}'
+            uncertainty_note = 'Both teams fit rule - high uncertainty'
+        elif home_fits:
+            final_confidence = home_confidence
+            team_analyzed = match.home_team.name
+            uncertainty_note = None
+        else:
+            final_confidence = away_confidence
+            team_analyzed = match.away_team.name
+            uncertainty_note = None
+
+        details: dict[str, Any] = {
+            'home_team_fits': home_fits,
+            'away_team_fits': away_fits,
+            'both_teams_fit': both_fit,
+            'home_confidence': home_confidence,
+            'away_confidence': away_confidence,
+            'home_team_rank': home_analysis.team.rank,
+            'away_team_rank': away_analysis.team.rank,
+            'home_consecutive_losses': home_analysis.consecutive_losses,
+            'away_consecutive_losses': away_analysis.consecutive_losses,
+            'home_consecutive_draws': home_analysis.consecutive_draws,
+            'away_consecutive_draws': away_analysis.consecutive_draws,
+            'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
+            'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
+            'home_is_top_5': home_analysis.is_top5_team,
+            'away_is_top_5': away_analysis.is_top5_team,
+        }
+
+        if uncertainty_note:
+            details['uncertainty_note'] = uncertainty_note
+
+        return Bet(
+            match_id=match.id,
+            home_team=match.home_team.name,
+            away_team=match.away_team.name,
+            league=match.league.name,
+            country=match.league.country,
+            match_date=(
+                match.match_date.strftime('%Y-%m-%d %H:%M')
+                if match.match_date
+                else None
+            ),
+            rule_name=self.name,
+            rule_type=self.rule_type,
+            bet_type=self.bet_type,
+            confidence=final_confidence,
+            team_analyzed=team_analyzed,
+            opportunity_type='historical_analysis',
+            details=details,
+        )
 
     def _calculate_base_confidence(self, team_analysis: TeamAnalysis) -> float:
         confidence = self.base_confidence
@@ -318,6 +393,61 @@ class LiveMatchRedCardRule(BettingRule):
             return 0.0, 'Both teams have red cards or invalid state'
 
         return min(1.0, confidence), team_analyzed
+
+    def evaluate_opportunity(
+        self,
+        match: Match,
+        home_analysis: TeamAnalysis,
+        away_analysis: TeamAnalysis,
+    ) -> 'Bet | None':
+        """Live-specific evaluation using red cards and current score."""
+        confidence, team_analyzed = self.calculate_live_confidence(
+            home_analysis=home_analysis,
+            away_analysis=away_analysis,
+            red_cards_home=match.red_cards_home,
+            red_cards_away=match.red_cards_away,
+            home_score=match.home_score or 0,
+            away_score=match.away_score or 0,
+        )
+
+        if confidence <= 0:
+            return None
+
+        details: dict[str, Any] = {
+            'live_match': True,
+            'red_cards_home': match.red_cards_home,
+            'red_cards_away': match.red_cards_away,
+            'current_score': f'{match.home_score or 0}-{match.away_score or 0}',
+            'minute': match.minute,
+            'home_team_rank': home_analysis.team.rank,
+            'away_team_rank': away_analysis.team.rank,
+            'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
+            'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
+            'home_consecutive_draws': home_analysis.consecutive_draws,
+            'away_consecutive_draws': away_analysis.consecutive_draws,
+            'home_consecutive_losses': home_analysis.consecutive_losses,
+            'away_consecutive_losses': away_analysis.consecutive_losses,
+        }
+
+        return Bet(
+            match_id=match.id,
+            home_team=match.home_team.name,
+            away_team=match.away_team.name,
+            league=match.league.name,
+            country=match.league.country,
+            match_date=(
+                match.match_date.strftime('%Y-%m-%d %H:%M')
+                if match.match_date
+                else None
+            ),
+            rule_name=self.name,
+            rule_type=self.rule_type,
+            bet_type=self.bet_type,
+            confidence=confidence,
+            team_analyzed=team_analyzed,
+            opportunity_type='live_opportunity',
+            details=details,
+        )
 
     def determine_outcome(self, match_result: 'MatchResult') -> str | None:
         """Determine outcome for live red card rule (win)"""
