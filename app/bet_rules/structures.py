@@ -25,6 +25,13 @@ class BetOutcome(str, Enum):
     LOSE = 'lose'
 
 
+class OpportunityType(str, Enum):
+    """Opportunity type for betting rules"""
+
+    HISTORICAL_ANALYSIS = 'historical_analysis'
+    LIVE_OPPORTUNITY = 'live_opportunity'
+
+
 class MatchResult(BaseModel):
     """Match result information for outcome determination"""
 
@@ -54,6 +61,10 @@ class BettingRule(BaseModel):
     description: str = Field(description='Rule description')
     slug: str = Field(description='Rule type identifier')
     bet_type: BetType = Field(description='Expected bet type')
+    opportunity_type: OpportunityType = Field(
+        default=OpportunityType.HISTORICAL_ANALYSIS,
+        description='Type of opportunity: historical_analysis or live_opportunity',
+    )
     base_confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description='Base confidence level'
     )
@@ -137,7 +148,6 @@ class BettingRule(BaseModel):
             slug=self.slug,
             confidence=final_confidence,
             team_analyzed=team_analyzed,
-            opportunity_type='historical_analysis',
             details=details,
         )
 
@@ -329,6 +339,7 @@ class LiveMatchRedCardRule(BettingRule):
             description='Live match with red card and draw -> bet on team without red card',
             slug='live_red_card',
             bet_type=BetType.WIN,
+            opportunity_type=OpportunityType.LIVE_OPPORTUNITY,
             base_confidence=0.5,
             **data,
         )
@@ -442,7 +453,6 @@ class LiveMatchRedCardRule(BettingRule):
             slug=self.slug,
             confidence=confidence,
             team_analyzed=team_analyzed,
-            opportunity_type='live_opportunity',
             details=details,
         )
 
@@ -481,10 +491,6 @@ class Bet(BaseModel):
     slug: str = Field(description='Rule slug identifier')
     confidence: float = Field(ge=0.0, le=1.0, description='Confidence level')
     team_analyzed: str = Field(description='Team that was analyzed')
-    opportunity_type: str = Field(
-        default='historical_analysis',
-        description='Type of opportunity: historical_analysis or live_opportunity',
-    )
     details: dict[str, Any] = Field(
         default_factory=dict, description='Additional details'
     )
@@ -508,3 +514,9 @@ class Bet(BaseModel):
         """Get bet type from the rule"""
         rule = self.rule
         return rule.bet_type if rule else BetType.WIN
+
+    @property
+    def opportunity_type(self) -> OpportunityType:
+        """Get opportunity type from the rule"""
+        rule = self.rule
+        return rule.opportunity_type if rule else OpportunityType.HISTORICAL_ANALYSIS

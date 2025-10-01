@@ -2,7 +2,9 @@
 """
 Migration script to update BettingOpportunity details field:
 1. Remove uncertainty_note entries
-2. Rename rule_type to slug
+2. Remove both_teams_fit entries
+3. Rename rule_type to slug
+4. Remove opportunity_type field from BettingOpportunity table
 """
 
 import json
@@ -58,6 +60,39 @@ def migrate_betting_opportunity_details():
             except json.JSONDecodeError as e:
                 print(f'Error parsing JSON for record {record_id}: {e}')
                 continue
+
+        # Remove opportunity_type column from BettingOpportunity table
+        print('Removing opportunity_type column from BettingOpportunity table...')
+        try:
+            # SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+            cursor.execute('''
+                CREATE TABLE BettingOpportunity_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    match_id INTEGER,
+                    rule_triggered VARCHAR(255),
+                    confidence_score REAL DEFAULT 0.0,
+                    details TEXT,
+                    outcome VARCHAR(255),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (match_id) REFERENCES Match(id)
+                )
+            ''')
+
+            # Copy data from old table to new table
+            cursor.execute('''
+                INSERT INTO BettingOpportunity_new
+                (id, match_id, rule_triggered, confidence_score, details, outcome, created_at)
+                SELECT id, match_id, rule_triggered, confidence_score, details, outcome, created_at
+                FROM BettingOpportunity
+            ''')
+
+            # Drop old table and rename new table
+            cursor.execute('DROP TABLE BettingOpportunity')
+            cursor.execute('ALTER TABLE BettingOpportunity_new RENAME TO BettingOpportunity')
+
+            print('Successfully removed opportunity_type column')
+        except Exception as e:
+            print(f'Error removing opportunity_type column: {e}')
 
         # Commit changes
         conn.commit()
