@@ -97,6 +97,46 @@ class BettingOpportunity(BaseModel):
         """Set details as JSON string"""
         self.details = json.dumps(details_dict)
 
+    def to_domain(self):
+        """Convert BettingOpportunity database model to Bet domain model"""
+
+        from app.bet_rules.structures import Bet
+
+        details = self.get_details()
+
+        # Get match information
+        match = self.match
+        if match:
+            home_team = match.home_team.name
+            away_team = match.away_team.name
+            league = match.league.name
+            country = match.league.country
+            match_date = (
+                match.match_date.strftime('%Y-%m-%d %H:%M')
+                if match.match_date
+                else None
+            )
+        else:
+            # Fallback values if match is not available
+            home_team = details.get('home_team', 'Unknown')
+            away_team = details.get('away_team', 'Unknown')
+            league = details.get('league', 'Unknown')
+            country = details.get('country', 'Unknown')
+            match_date = details.get('match_date')
+
+        return Bet(
+            match_id=self.match.id if self.match else None,
+            home_team=home_team,
+            away_team=away_team,
+            league=league,
+            country=country,
+            match_date=match_date,
+            slug=self.rule_slug,
+            confidence=self.confidence_score,
+            team_analyzed=details.get('team_analyzed', 'Unknown'),
+            details=details,
+        )
+
 
 class TelegramUser(BaseModel):
     id = AutoField()

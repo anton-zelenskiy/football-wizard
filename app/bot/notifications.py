@@ -188,12 +188,11 @@ def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str
     )
 
     for i, opp in enumerate(opportunities, 1):
+        # Convert BettingOpportunity to Bet to access opportunity_type
+        bet = opp.to_domain()
+
         confidence_emoji = (
-            '🟢'
-            if opp.confidence_score >= 0.8
-            else '🟡'
-            if opp.confidence_score >= 0.6
-            else '🔴'
+            '🟢' if bet.confidence >= 0.8 else '🟡' if bet.confidence >= 0.6 else '🔴'
         )
 
         # Get match information if available
@@ -206,16 +205,12 @@ def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str
         else:
             match_info = '⚽ Match details not available'
 
-        # Get details for team analyzed
-        details = opp.get_details()
-        team_analyzed = details.get('team_analyzed', 'Unknown')
-
         message += (
-            f"{i}. {confidence_emoji} <b>{opp.rule_slug}</b>\n"
+            f"{i}. {confidence_emoji} <b>{bet.rule_name}</b>\n"
             f"   {match_info}\n"
-            f"   🎯 Team Analyzed: {team_analyzed}\n"
-            f"   📊 Confidence: {opp.confidence_score:.1%}\n"
-            f"   🏟️ Type: {opp.opportunity_type.replace('_', ' ').title()}\n"
+            f"   🎯 Team Analyzed: {bet.team_analyzed}\n"
+            f"   📊 Confidence: {bet.confidence:.1%}\n"
+            f"   🏟️ Type: {bet.opportunity_type.value.replace('_', ' ').title()}\n"
         )
 
     message += 'Use /settings to adjust your notification preferences.'
@@ -251,6 +246,9 @@ def format_completed_opportunities_message(
     )
 
     for i, opp in enumerate(opportunities, 1):
+        # Convert BettingOpportunity to Bet to access opportunity_type
+        bet = opp.to_domain()
+
         # Outcome emoji
         outcome_emoji = (
             '✅' if opp.outcome == 'win' else '❌' if opp.outcome == 'lose' else '⏳'
@@ -258,11 +256,7 @@ def format_completed_opportunities_message(
 
         # Confidence emoji
         confidence_emoji = (
-            '🟢'
-            if opp.confidence_score >= 0.8
-            else '🟡'
-            if opp.confidence_score >= 0.6
-            else '🔴'
+            '🟢' if bet.confidence >= 0.8 else '🟡' if bet.confidence >= 0.6 else '🔴'
         )
 
         # Get match information
@@ -277,16 +271,12 @@ def format_completed_opportunities_message(
         else:
             match_info = '⚽ Match details not available'
 
-        # Get details for team analyzed
-        details = opp.get_details()
-        team_analyzed = details.get('team_analyzed', 'Unknown')
-
         message += (
-            f"{i}. {outcome_emoji} <b>{opp.rule_slug}</b>\n"
+            f"{i}. {outcome_emoji} <b>{bet.rule_name}</b>\n"
             f"   {match_info}\n"
-            f"   🎯 Team Analyzed: {team_analyzed}\n"
-            f"   {confidence_emoji} Confidence: {opp.confidence_score:.1%}\n"
-            f"   🏟️ Type: {opp.opportunity_type.replace('_', ' ').title()}\n"
+            f"   🎯 Team Analyzed: {bet.team_analyzed}\n"
+            f"   {confidence_emoji} Confidence: {bet.confidence:.1%}\n"
+            f"   🏟️ Type: {bet.opportunity_type.value.replace('_', ' ').title()}\n"
             f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
         )
 

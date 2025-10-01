@@ -290,7 +290,6 @@ class FootballDataStorage:
 
         # Add slug to details for outcome determination
         details = opportunity.details.copy()
-        details['slug'] = opportunity.slug
         details['team_analyzed'] = opportunity.team_analyzed
 
         # Check for existing opportunity to prevent duplicates
