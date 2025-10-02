@@ -11,10 +11,10 @@ from app.settings import settings
 TELEGRAM_BOT_TOKEN = settings.telegram_bot_token
 
 if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
+    raise ValueError('TELEGRAM_BOT_TOKEN environment variable is not set')
 
 # Generate a random secret token for webhook validation
-webhook_secret_token = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+webhook_secret_token = os.getenv('TELEGRAM_WEBHOOK_SECRET', '')
 
 # Create a custom AioHttp session
 session = AiohttpSession()
@@ -33,4 +33,4 @@ class WebhookConfig(BaseModel):
 
 
 def get_webhook_url() -> str:
-    return f"{settings.base_host}/football/api/v1/bot/webhook"
+    return f'{settings.base_host}/football/api/v1/bot/webhook'

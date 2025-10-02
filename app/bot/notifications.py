@@ -84,14 +84,14 @@ def _format_opportunity_message(opportunity: Bet) -> str:
     )
 
     message = (
-        f"🎯 <b>Betting Opportunity</b>\n\n"
-        f"🏆 <b>{opportunity.rule_name}</b>\n"
-        f"⚽ <b>{opportunity.home_team}</b> vs <b>{opportunity.away_team}</b>\n"
-        f"🏟️ {opportunity.league} ({opportunity.country})\n"
-        f"{confidence_emoji} <b>Confidence: {opportunity.confidence:.1%}</b>\n\n"
-        f"💡 <b>Bet Type:</b> {opportunity.bet_type.value.replace('_', ' ').title()}\n"
-        f"🎯 <b>Team Analyzed:</b> {opportunity.team_analyzed}\n\n"
-        f"📊 Rule Type: {opportunity.slug.replace('_', ' ').title()}"
+        f'🎯 <b>Betting Opportunity</b>\n\n'
+        f'🏆 <b>{opportunity.rule_name}</b>\n'
+        f'⚽ <b>{opportunity.home_team}</b> vs <b>{opportunity.away_team}</b>\n'
+        f'🏟️ {opportunity.league} ({opportunity.country})\n'
+        f'{confidence_emoji} <b>Confidence: {opportunity.confidence:.1%}</b>\n\n'
+        f'💡 <b>Bet Type:</b> {opportunity.bet_type.value.replace("_", " ").title()}\n'
+        f'🎯 <b>Team Analyzed:</b> {opportunity.team_analyzed}\n\n'
+        f'📊 Rule Type: {opportunity.slug.replace("_", " ").title()}'
     )
 
     return message
@@ -206,11 +206,11 @@ def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str
             match_info = '⚽ Match details not available'
 
         message += (
-            f"{i}. {confidence_emoji} <b>{bet.rule_name}</b>\n"
-            f"   {match_info}\n"
-            f"   🎯 Team Analyzed: {bet.team_analyzed}\n"
-            f"   📊 Confidence: {bet.confidence:.1%}\n"
-            f"   🏟️ Type: {bet.opportunity_type.value.replace('_', ' ').title()}\n"
+            f'{i}. {confidence_emoji} <b>{bet.rule_name}</b>\n'
+            f'   {match_info}\n'
+            f'   🎯 Team Analyzed: {bet.team_analyzed}\n'
+            f'   📊 Confidence: {bet.confidence:.1%}\n'
+            f'   🏟️ Type: {bet.opportunity_type.value.replace("_", " ").title()}\n'
         )
 
     message += 'Use /settings to adjust your notification preferences.'
@@ -231,11 +231,11 @@ def format_completed_opportunities_message(
 
     # Statistics header
     stats_text = (
-        f"📊 <b>Betting Performance Statistics</b>\n\n"
-        f"🎯 Total Opportunities: {statistics['total']}\n"
-        f"✅ Wins: {statistics['wins']}\n"
-        f"❌ Losses: {statistics['losses']}\n"
-        f"📈 Win Rate: {statistics['win_rate']}%\n\n"
+        f'📊 <b>Betting Performance Statistics</b>\n\n'
+        f'🎯 Total Opportunities: {statistics["total"]}\n'
+        f'✅ Wins: {statistics["wins"]}\n'
+        f'❌ Losses: {statistics["losses"]}\n'
+        f'📈 Win Rate: {statistics["win_rate"]}%\n\n'
     )
 
     # Recent completed opportunities
@@ -272,12 +272,12 @@ def format_completed_opportunities_message(
             match_info = '⚽ Match details not available'
 
         message += (
-            f"{i}. {outcome_emoji} <b>{bet.rule_name}</b>\n"
-            f"   {match_info}\n"
-            f"   🎯 Team Analyzed: {bet.team_analyzed}\n"
-            f"   {confidence_emoji} Confidence: {bet.confidence:.1%}\n"
-            f"   🏟️ Type: {bet.opportunity_type.value.replace('_', ' ').title()}\n"
-            f"   📅 Created: {opp.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+            f'{i}. {outcome_emoji} <b>{bet.rule_name}</b>\n'
+            f'   {match_info}\n'
+            f'   🎯 Team Analyzed: {bet.team_analyzed}\n'
+            f'   {confidence_emoji} Confidence: {bet.confidence:.1%}\n'
+            f'   🏟️ Type: {bet.opportunity_type.value.replace("_", " ").title()}\n'
+            f'   📅 Created: {opp.created_at.strftime("%Y-%m-%d %H:%M")}\n\n'
         )
 
     message += 'Use /opportunities to see active opportunities.'

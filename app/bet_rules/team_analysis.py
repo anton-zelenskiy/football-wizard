@@ -8,30 +8,30 @@ class TeamAnalysis(BaseModel):
 
     # Core team info
     team: Team
-    team_type: str = Field(description="Type of team (home/away)")
-    rank: int | None = Field(default=None, description="Team rank in league")
+    team_type: str = Field(description='Type of team (home/away)')
+    rank: int | None = Field(default=None, description='Team rank in league')
 
     # Consecutive streaks
-    consecutive_wins: int = Field(default=0, ge=0, description="Consecutive wins")
-    consecutive_losses: int = Field(default=0, ge=0, description="Consecutive losses")
-    consecutive_draws: int = Field(default=0, ge=0, description="Consecutive draws")
+    consecutive_wins: int = Field(default=0, ge=0, description='Consecutive wins')
+    consecutive_losses: int = Field(default=0, ge=0, description='Consecutive losses')
+    consecutive_draws: int = Field(default=0, ge=0, description='Consecutive draws')
     consecutive_no_goals: int = Field(
-        default=0, ge=0, description="Consecutive matches without goals"
+        default=0, ge=0, description='Consecutive matches without goals'
     )
     consecutive_goals: int = Field(
-        default=0, ge=0, description="Consecutive matches with goals"
+        default=0, ge=0, description='Consecutive matches with goals'
     )
 
     # Match statistics
     recent_matches: list[Match] = Field(
-        default_factory=list, description="Recent matches for analysis"
+        default_factory=list, description='Recent matches for analysis'
     )
     total_matches: int = Field(
-        default=0, ge=0, description="Total recent matches analyzed"
+        default=0, ge=0, description='Total recent matches analyzed'
     )
-    wins: int = Field(default=0, ge=0, description="Number of wins")
-    draws: int = Field(default=0, ge=0, description="Number of draws")
-    losses: int = Field(default=0, ge=0, description="Number of losses")
+    wins: int = Field(default=0, ge=0, description='Number of wins')
+    draws: int = Field(default=0, ge=0, description='Number of draws')
+    losses: int = Field(default=0, ge=0, description='Number of losses')
 
     # Computed rates
     @computed_field
@@ -116,19 +116,19 @@ class TeamAnalysisService:
 
         # Calculate consecutive streaks
         analysis.consecutive_wins = self._calculate_consecutive_streak(
-            recent_matches, team, "win"
+            recent_matches, team, 'win'
         )
         analysis.consecutive_losses = self._calculate_consecutive_streak(
-            recent_matches, team, "loss"
+            recent_matches, team, 'loss'
         )
         analysis.consecutive_draws = self._calculate_consecutive_streak(
-            recent_matches, team, "draw"
+            recent_matches, team, 'draw'
         )
         analysis.consecutive_no_goals = self._calculate_consecutive_streak(
-            recent_matches, team, "no_goals"
+            recent_matches, team, 'no_goals'
         )
         analysis.consecutive_goals = self._calculate_consecutive_streak(
-            recent_matches, team, "goals"
+            recent_matches, team, 'goals'
         )
 
         # Calculate match results
@@ -149,15 +149,15 @@ class TeamAnalysisService:
         streak = 0
 
         for match in matches:
-            if streak_type == "win" and self._team_won(match, team):
+            if streak_type == 'win' and self._team_won(match, team):
                 streak += 1
-            elif streak_type == "loss" and self._team_lost(match, team):
+            elif streak_type == 'loss' and self._team_lost(match, team):
                 streak += 1
-            elif streak_type == "draw" and self._team_drew(match, team):
+            elif streak_type == 'draw' and self._team_drew(match, team):
                 streak += 1
-            elif streak_type == "no_goals" and self._team_no_goals(match, team):
+            elif streak_type == 'no_goals' and self._team_no_goals(match, team):
                 streak += 1
-            elif streak_type == "goals" and not self._team_no_goals(match, team):
+            elif streak_type == 'goals' and not self._team_no_goals(match, team):
                 streak += 1
             else:
                 break

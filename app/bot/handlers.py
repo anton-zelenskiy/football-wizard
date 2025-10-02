@@ -40,18 +40,18 @@ async def start_command(message: Message) -> None:
     )
 
     welcome_text = (
-        f"🎯 Welcome to Football Betting Analysis Bot!\n\n"
+        f'🎯 Welcome to Football Betting Analysis Bot!\n\n'
         f"Hi {first_name or 'there'}! I'll help you find betting opportunities "
-        f"based on team statistics and live match analysis.\n\n"
-        f"📊 I monitor:\n"
-        f"• Top-7 European leagues\n"
-        f"• Champions League, Europa League, Conference League\n"
-        f"• Russian Premier League\n\n"
-        f"🔍 I look for:\n"
-        f"• Teams with poor recent form\n"
-        f"• Live match opportunities (red cards, draws)\n"
-        f"• Historical patterns and trends\n\n"
-        f"Use /help to see all available commands."
+        f'based on team statistics and live match analysis.\n\n'
+        f'📊 I monitor:\n'
+        f'• Top-7 European leagues\n'
+        f'• Champions League, Europa League, Conference League\n'
+        f'• Russian Premier League\n\n'
+        f'🔍 I look for:\n'
+        f'• Teams with poor recent form\n'
+        f'• Live match opportunities (red cards, draws)\n'
+        f'• Historical patterns and trends\n\n'
+        f'Use /help to see all available commands.'
     )
 
     keyboard = InlineKeyboardMarkup(
@@ -138,14 +138,14 @@ async def status_command(message: Message) -> None:
         user = storage.get_telegram_user(user_id)
 
         status_text = (
-            f"📊 Your Subscription Status\n\n"
-            f"✅ Status: {'Active' if user.is_active else 'Inactive'}\n"
-            f"📅 Daily Notifications: "
-            f"{'✅ Enabled' if user.daily_notifications else '❌ Disabled'}\n"
-            f"🔴 Live Notifications: "
-            f"{'✅ Enabled' if user.live_notifications else '❌ Disabled'}\n"
-            f"📅 Joined: {user.created_at.strftime('%Y-%m-%d %H:%M')}\n"
-            f"🔄 Last Updated: {user.updated_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+            f'📊 Your Subscription Status\n\n'
+            f'✅ Status: {"Active" if user.is_active else "Inactive"}\n'
+            f'📅 Daily Notifications: '
+            f'{"✅ Enabled" if user.daily_notifications else "❌ Disabled"}\n'
+            f'🔴 Live Notifications: '
+            f'{"✅ Enabled" if user.live_notifications else "❌ Disabled"}\n'
+            f'📅 Joined: {user.created_at.strftime("%Y-%m-%d %H:%M")}\n'
+            f'🔄 Last Updated: {user.updated_at.strftime("%Y-%m-%d %H:%M")}\n\n'
         )
 
         if user.is_active:
@@ -382,9 +382,9 @@ async def completed_command(message: Message) -> None:
         await message.answer(completed_text, parse_mode='HTML')
 
         logger.info(
-            f"User {user_id} requested completed betting opportunities, "
-            f"found {len(opportunities)} opportunities, "
-            f"statistics: {statistics['wins']}W/{statistics['losses']}L ({statistics['win_rate']}%)"
+            f'User {user_id} requested completed betting opportunities, '
+            f'found {len(opportunities)} opportunities, '
+            f'statistics: {statistics["wins"]}W/{statistics["losses"]}L ({statistics["win_rate"]}%)'
         )
 
     except Exception as e:
@@ -508,26 +508,26 @@ async def _show_settings(user_id: int, chat_id: int) -> None:
         user = storage.get_telegram_user(user_id)
 
         settings_text = (
-            f"⚙️ Notification Settings\n\n"
-            f"📅 Daily Notifications: "
-            f"{'✅ Enabled' if user.daily_notifications else '❌ Disabled'}\n"
-            f"🔴 Live Notifications: "
-            f"{'✅ Enabled' if user.live_notifications else '❌ Disabled'}\n"
-            f"✅ Status: {'Active' if user.is_active else 'Inactive'}\n\n"
-            f"Choose your notification preferences:"
+            f'⚙️ Notification Settings\n\n'
+            f'📅 Daily Notifications: '
+            f'{"✅ Enabled" if user.daily_notifications else "❌ Disabled"}\n'
+            f'🔴 Live Notifications: '
+            f'{"✅ Enabled" if user.live_notifications else "❌ Disabled"}\n'
+            f'✅ Status: {"Active" if user.is_active else "Inactive"}\n\n'
+            f'Choose your notification preferences:'
         )
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=f"📅 Daily: {'ON' if user.daily_notifications else 'OFF'}",
+                        text=f'📅 Daily: {"ON" if user.daily_notifications else "OFF"}',
                         callback_data='toggle_daily',
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=f"🔴 Live: {'ON' if user.live_notifications else 'OFF'}",
+                        text=f'🔴 Live: {"ON" if user.live_notifications else "OFF"}',
                         callback_data='toggle_live',
                     )
                 ],

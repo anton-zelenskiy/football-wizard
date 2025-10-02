@@ -54,6 +54,7 @@ select = [
     "T20",  # flake8-print
     "I",    # isort (import sorting)
     "TID",  # flake8-tidy-imports (import organization)
+    # Note: Q rules (quote style) are intentionally excluded to avoid conflicts with formatter
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -64,7 +65,7 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Ignore specific rules globally
-ignore = ["B904", "Q000", "Q003"]  # Ignore raise ... from err requirement and quote style conflicts
+ignore = ["B904", "Q000", "Q003", "Q001", "Q002"]  # Ignore raise ... from err requirement and quote style conflicts
 
 [tool.ruff.lint.isort]
 # Configure import sorting
@@ -72,6 +73,13 @@ known-first-party = ["app"]
 force-sort-within-sections = true
 lines-after-imports = 2
 split-on-trailing-comma = true
+
+[tool.ruff.lint.flake8-quotes]
+# Use single quotes to match formatter
+inline-quotes = "single"
+multiline-quotes = "single"
+docstring-quotes = "single"
+avoid-escape = true
 
 [tool.ruff.lint.per-file-ignores]
 # Tests can use magic values, assertions, and relative imports

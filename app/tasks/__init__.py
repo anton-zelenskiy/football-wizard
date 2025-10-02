@@ -9,9 +9,9 @@ from .betting_tasks import (
 
 
 __all__ = [
-    "BettingTasks",
-    "daily_scheduled_analysis",
-    "live_matches_analysis",
-    "data_sync",
-    "refresh_league_data",
+    'BettingTasks',
+    'daily_scheduled_analysis',
+    'live_matches_analysis',
+    'data_sync',
+    'refresh_league_data',
 ]

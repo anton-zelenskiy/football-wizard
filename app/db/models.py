@@ -104,20 +104,7 @@ class BettingOpportunity(BaseModel):
 
         details = self.get_details()
 
-        # Get match information
-        match = self.match
-        if match:
-            match_summary = MatchSummary.from_match(self.match)
-        else:
-            # Fallback values if match is not available
-            match_summary = MatchSummary(
-                match_id=None,
-                home_team=details.get('home_team', 'Unknown'),
-                away_team=details.get('away_team', 'Unknown'),
-                league=details.get('league', 'Unknown'),
-                country=details.get('country', 'Unknown'),
-                match_date=details.get('match_date'),
-            )
+        match_summary = MatchSummary.from_match(self.match)
 
         opportunity = BettingOpportunity(
             slug=self.rule_slug,

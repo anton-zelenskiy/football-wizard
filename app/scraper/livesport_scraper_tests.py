@@ -13,7 +13,7 @@ class TestLivesportScraperContextManager:
     @pytest.mark.asyncio
     async def test_context_manager_initialization(self):
         """Test that the context manager properly initializes resources"""
-        with patch("app.scraper.livesport_scraper.async_playwright") as mock_playwright:
+        with patch('app.scraper.livesport_scraper.async_playwright') as mock_playwright:
             # Mock the playwright instance
             mock_playwright_instance = AsyncMock()
             mock_browser = AsyncMock()
@@ -45,7 +45,7 @@ class TestLivesportScraperContextManager:
     @pytest.mark.asyncio
     async def test_context_manager_cleanup_on_exception(self):
         """Test that resources are cleaned up even when an exception occurs"""
-        with patch("app.scraper.livesport_scraper.async_playwright") as mock_playwright:
+        with patch('app.scraper.livesport_scraper.async_playwright') as mock_playwright:
             # Mock the playwright instance
             mock_playwright_instance = AsyncMock()
             mock_browser = AsyncMock()
@@ -61,7 +61,7 @@ class TestLivesportScraperContextManager:
             # Test that cleanup happens even with exceptions
             try:
                 async with scraper:
-                    raise ValueError("Test exception")
+                    raise ValueError('Test exception')
             except ValueError:
                 pass
 
@@ -76,14 +76,14 @@ class TestLivesportScraperContextManager:
 
         with pytest.raises(
             RuntimeError,
-            match="Browser not initialized. Use LivesportScraper as context manager.",
+            match='Browser not initialized. Use LivesportScraper as context manager.',
         ):
             await scraper._setup_browser()
 
     @pytest.mark.asyncio
     async def test_context_manager_reuse(self):
         """Test that the context manager can be reused"""
-        with patch("app.scraper.livesport_scraper.async_playwright") as mock_playwright:
+        with patch('app.scraper.livesport_scraper.async_playwright') as mock_playwright:
             # Mock the playwright instance
             mock_playwright_instance = AsyncMock()
             mock_browser = AsyncMock()
@@ -124,7 +124,7 @@ class TestLivesportScraperContextManager:
     @pytest.mark.asyncio
     async def test_scrape_methods_with_context_manager(self):
         """Test that scraping methods work with context manager"""
-        with patch("app.scraper.livesport_scraper.async_playwright") as mock_playwright:
+        with patch('app.scraper.livesport_scraper.async_playwright') as mock_playwright:
             # Mock the playwright instance
             mock_playwright_instance = AsyncMock()
             mock_browser = AsyncMock()

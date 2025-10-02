@@ -344,6 +344,12 @@ class FootballDataStorage:
         """Determine if a betting opportunity was won or lost based on the rule and match result"""
         from app.bet_rules.rule_engine import BettingRulesEngine
 
+        if match.status != 'finished':
+            logger.warning(
+                f'Match {match.id} is incomplete, skipping outcome determination'
+            )
+            return None
+
         # Get opportunity details
         details = opportunity.get_details()
         team_analyzed = details.get('team_analyzed', '')
@@ -390,8 +396,8 @@ class FootballDataStorage:
                 BettingOpportunity.select()
                 .join(Match, on=(BettingOpportunity.match == Match.id))
                 .where(
-                    (BettingOpportunity.outcome.is_null())  # No outcome yet (pending)
-                    & (Match.match_date > datetime.now())  # Future matches only
+                    (BettingOpportunity.outcome.is_null())
+                    & (Match.match_date > datetime.now())
                 )
                 .order_by(BettingOpportunity.confidence_score.desc())
             )

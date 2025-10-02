@@ -6,10 +6,10 @@ from app.bot.register import register_handlers
 register_handlers()
 
 __all__ = [
-    "bot",
-    "dp",
-    "webhook_secret_token",
-    "get_webhook_url",
-    "WebhookConfig",
-    "register_handlers",
+    'bot',
+    'dp',
+    'webhook_secret_token',
+    'get_webhook_url',
+    'WebhookConfig',
+    'register_handlers',
 ]
