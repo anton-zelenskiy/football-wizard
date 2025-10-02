@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 import structlog
 
-from app.bet_rules.structures import Bet, MatchSummary
+from app.bet_rules.structures import Bet, BetOutcome, MatchSummary
 from app.db.models import (
     BettingOpportunity,
     League,
@@ -267,7 +267,7 @@ class FootballDataStorage:
             # Determine outcome based on the betting rule
             outcome = self._determine_betting_outcome(opportunity, match)
             if outcome:
-                opportunity.outcome = outcome
+                opportunity.outcome = outcome.value
                 opportunity.save()
                 updated_count += 1
                 logger.info(
@@ -340,7 +340,7 @@ class FootballDataStorage:
 
     def _determine_betting_outcome(
         self, opportunity: BettingOpportunity, match: Match
-    ) -> str | None:
+    ) -> BetOutcome | None:
         """Determine if a betting opportunity was won or lost based on the rule and match result"""
         from app.bet_rules.rule_engine import BettingRulesEngine
 
