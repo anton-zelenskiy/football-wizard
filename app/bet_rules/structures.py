@@ -59,7 +59,7 @@ class BettingRule(BaseModel):
         self,
         team_analysis: TeamAnalysis,
         opponent_analysis: TeamAnalysis,
-        match_summary: 'MatchSummary' = None,
+        match_summary: 'MatchSummary',
     ) -> float:
         """Calculate confidence based on team analysis"""
         raise NotImplementedError('Subclasses must implement calculate_confidence')
@@ -121,8 +121,6 @@ class BettingRule(BaseModel):
             team_analyzed = match.away_team.name
 
         details: dict[str, Any] = {
-            'home_team_fits': home_fits,
-            'away_team_fits': away_fits,
             'home_confidence': home_confidence,
             'away_confidence': away_confidence,
             'home_team_rank': home_team_analysis.team.rank,
