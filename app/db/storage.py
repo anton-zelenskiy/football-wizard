@@ -198,45 +198,45 @@ class FootballDataStorage:
             else:
                 logger.debug(f'Updated team statistics: {team.name}')
 
-    def get_team_recent_matches(self, team_name: str, limit: int = 5) -> list[Match]:
-        """Get recent matches for a specific team"""
-        return (
-            Match.select()
-            .join(Team, on=(Match.home_team == Team.id) | (Match.away_team == Team.id))
-            .where(Team.name == team_name)
-            .order_by(Match.match_date.desc())
-            .limit(limit)
-            .execute()
-        )
-
-    def get_team_recent_finished_matches(
-        self, team: Team, count: int = 5
+    def get_team_matches_by_season_and_rounds(
+        self, team: Team, season: int, current_round: int, rounds_back: int = 5
     ) -> list[Match]:
-        """Get recent finished matches for a team"""
+        """Get team matches from specific season and rounds for analysis"""
         try:
-            # Get matches where team participated
+            # Calculate the range of rounds to include
+            start_round = max(1, current_round - rounds_back)
+            end_round = current_round - 1  # Exclude current round
+
+            if end_round < start_round:
+                logger.warning(
+                    f'No previous rounds available for {team.name} in season {season}, '
+                    f'current round: {current_round}'
+                )
+                return []
+
+            # Get matches where team participated in the specified season and rounds
             matches = (
                 Match.select()
                 .where(
                     ((Match.home_team == team) | (Match.away_team == team))
+                    & (Match.season == season)
+                    & (Match.round >= start_round)
+                    & (Match.round <= end_round)
                     & (Match.status == 'finished')
                 )
-                .order_by(Match.match_date.desc())
-                .limit(count)
+                .order_by(Match.round.desc(), Match.match_date.desc())
             )
             match_list = list(matches)
             logger.debug(
-                f'Found {len(match_list)} recent matches for {team.name} '
-                f'(requested: {count})'
+                f'Found {len(match_list)} matches for {team.name} in season {season}, '
+                f'rounds {start_round}-{end_round} (current: {current_round})'
             )
-            if match_list:
-                logger.debug(
-                    f'Most recent match: {match_list[0].home_team.name} vs '
-                    f'{match_list[0].away_team.name} on {match_list[0].match_date}'
-                )
             return match_list
         except Exception as e:
-            logger.error(f'Error getting recent matches for {team.name}: {e}')
+            logger.error(
+                f'Error getting matches for {team.name} season {season} '
+                f'rounds {current_round - rounds_back}-{current_round - 1}: {e}'
+            )
             return []
 
     def get_scheduled_matches(self) -> list[Match]:

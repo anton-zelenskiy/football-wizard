@@ -1,3 +1,5 @@
+import pytest
+
 from app.bet_rules.structures import (
     BetOutcome,
     BetType,
@@ -43,40 +45,57 @@ def test_top5_consecutive_losses_rule_creation():
     assert rule.base_confidence == 0.5
 
 
-def test_top5_consecutive_losses_rule_not_top_5():
-    """Test confidence calculation for non-top 5 team"""
-    rule = Top5ConsecutiveLossesRule()
-    team_analysis = create_team_analysis(consecutive_losses=3)
-
-    confidence = rule.calculate_confidence(team_analysis)
-    assert confidence == 0.0
-
-
-def test_top5_consecutive_losses_rule_insufficient_losses():
-    """Test confidence calculation with insufficient consecutive losses"""
-    rule = Top5ConsecutiveLossesRule()
-    team_analysis = create_team_analysis(consecutive_losses=1, rank=3)  # Less than 2
-
-    confidence = rule.calculate_confidence(team_analysis)
-    assert confidence == 0.0
-
-
-def test_top5_consecutive_losses_rule_valid():
-    """Test confidence calculation for valid top 5 team with losses"""
+@pytest.mark.parametrize(
+    'consecutive_losses,rank,expected_confidence,description',
+    [
+        (3, 10, 0.0, 'Non-top 5 team (rank 10)'),
+        (1, 3, 0.0, 'Top 5 team with insufficient losses (1)'),
+        (2, 3, 0.7, 'Valid top 5 team with 2 losses'),
+        (3, 3, 0.7, 'Valid top 5 team with 3 losses'),
+        (4, 3, 0.7, 'Valid top 5 team with 4 losses'),
+    ],
+)
+def test_top5_consecutive_losses_rule_confidence(
+    consecutive_losses, rank, expected_confidence, description
+):
+    """Test confidence calculation for top 5 consecutive losses rule"""
     rule = Top5ConsecutiveLossesRule()
     team_analysis = create_team_analysis(
-        consecutive_losses=2, rank=3, consecutive_no_goals=0
+        consecutive_losses=consecutive_losses, rank=rank
+    )
+    opponent_analysis = create_team_analysis(rank=10)
+    match_summary = MatchSummary(
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
     )
 
-    confidence = rule.calculate_confidence(team_analysis)
-    assert confidence == 0.7  # Base + 0.2 for top 5
+    confidence = rule.calculate_confidence(
+        team_analysis, opponent_analysis, match_summary
+    )
+    assert (
+        abs(confidence - expected_confidence) < 0.001
+    ), f'Failed for {description}: got {confidence}, expected {expected_confidence}'
 
 
-def test_top5_consecutive_losses_rule_determine_outcome():
+@pytest.mark.parametrize(
+    'home_score,away_score,team_analyzed,expected_outcome,description',
+    [
+        (2, 1, 'Home Team', BetOutcome.WIN, 'Home team wins'),
+        (1, 1, 'Home Team', BetOutcome.WIN, 'Home team draws'),
+        (1, 2, 'Home Team', BetOutcome.LOSE, 'Home team loses'),
+        (1, 2, 'Away Team', BetOutcome.WIN, 'Away team wins'),
+        (1, 1, 'Away Team', BetOutcome.WIN, 'Away team draws'),
+        (2, 1, 'Away Team', BetOutcome.LOSE, 'Away team loses'),
+    ],
+)
+def test_top5_consecutive_losses_rule_determine_outcome(
+    home_score, away_score, team_analyzed, expected_outcome, description
+):
     """Test Top5ConsecutiveLossesRule determine_outcome method"""
     rule = Top5ConsecutiveLossesRule()
 
-    # Home team (top-5) with consecutive losses - should win if home wins or draws
     match_result = MatchSummary(
         match_id=None,
         home_team='Home Team',
@@ -84,105 +103,9 @@ def test_top5_consecutive_losses_rule_determine_outcome():
         league='Test League',
         country='Test Country',
         match_date=None,
-        home_score=2,
-        away_score=1,
+        home_score=home_score,
+        away_score=away_score,
     )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
 
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=1,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
-
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=2,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE.value
-
-    # Away team (top-5) with consecutive losses - should win if away wins or draws
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=2,
-    )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN.value
-
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=1,
-    )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN.value
-
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=2,
-        away_score=1,
-    )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.LOSE.value
-
-    # Both teams fit rule - should win if draw
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=1,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
-
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=2,
-        away_score=1,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
-
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=2,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE.value
+    outcome = rule.determine_outcome(match_result, team_analyzed)
+    assert outcome == expected_outcome, f'Failed for {description}'

@@ -21,9 +21,10 @@ logger = structlog.get_logger()
 class BettingRulesEngine:
     """Betting rules engine with configurable rules"""
 
-    def __init__(self) -> None:
+    def __init__(self, rounds_back: int = 5) -> None:
         self.storage = FootballDataStorage()
         self.top_teams_count = settings.top_teams_count
+        self.rounds_back = rounds_back
         self.team_analysis_service = TeamAnalysisService(
             top_teams_count=self.top_teams_count, min_consecutive_losses=3
         )
@@ -43,18 +44,33 @@ class BettingRulesEngine:
         return None
 
     def analyze_match(self, match: Match) -> list[Bet]:
-        """Analyze a single match for betting opportunities"""
+        """Analyze a single match for betting opportunities using season and round context"""
         opportunities: list[Bet] = []
 
-        # Get recent matches for both teams
-        home_recent_matches = self.storage.get_team_recent_finished_matches(
-            match.home_team, count=5
+        # Validate that match has required fields
+        if not match.season or not match.round:
+            logger.warning(
+                f'Match {match.id} missing season or round information. '
+                f'Season: {match.season}, Round: {match.round}'
+            )
+            return opportunities
+
+        # Get team matches from the same season and previous rounds
+        home_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
+            match.home_team, match.season, match.round, self.rounds_back
         )
-        away_recent_matches = self.storage.get_team_recent_finished_matches(
-            match.away_team, count=5
+        away_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
+            match.away_team, match.season, match.round, self.rounds_back
         )
 
-        # Analyze both teams
+        logger.debug(
+            f'Analyzing match {match.home_team.name} vs {match.away_team.name} '
+            f'(Season {match.season}, Round {match.round}) - '
+            f'Home team: {len(home_recent_matches)} previous matches, '
+            f'Away team: {len(away_recent_matches)} previous matches'
+        )
+
+        # Analyze both teams using season-specific data
         home_analysis = self.team_analysis_service.analyze_team_performance(
             match.home_team, 'home', home_recent_matches
         )
@@ -66,8 +82,8 @@ class BettingRulesEngine:
         for rule in self.rules:
             opportunity = rule.evaluate_opportunity(
                 match=match,
-                home_analysis=home_analysis,
-                away_analysis=away_analysis,
+                home_team_analysis=home_analysis,
+                away_team_analysis=away_analysis,
             )
             if opportunity:
                 opportunities.append(opportunity)

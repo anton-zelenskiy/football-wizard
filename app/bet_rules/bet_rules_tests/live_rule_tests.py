@@ -1,3 +1,5 @@
+import pytest
+
 from app.bet_rules.structures import (
     BetOutcome,
     BetType,
@@ -34,8 +36,25 @@ def test_live_match_red_card_rule_historical_analysis():
         consecutive_no_goals=1,
     )
 
+    opponent_analysis = TeamAnalysis(
+        team=Team(name='Opponent Team', rank=2),
+        team_type='away',
+        consecutive_losses=0,
+        consecutive_draws=0,
+        consecutive_no_goals=0,
+    )
+
+    match_summary = MatchSummary(
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+    )
+
     # Live rule should return 0 for historical analysis
-    confidence = rule.calculate_confidence(team_analysis)
+    confidence = rule.calculate_confidence(
+        team_analysis, opponent_analysis, match_summary
+    )
     assert confidence == 0.0
 
 
@@ -506,11 +525,21 @@ def test_live_match_red_card_rule_both_teams_red_cards():
     assert confidence == 0.0
 
 
-def test_live_match_red_card_rule_outcome_determination():
+@pytest.mark.parametrize(
+    'home_score,away_score,team_analyzed,expected_outcome,description',
+    [
+        (2, 1, 'Home Team', BetOutcome.WIN, 'Home team wins'),
+        (1, 2, 'Home Team', BetOutcome.LOSE, 'Home team loses'),
+        (1, 2, 'Away Team', BetOutcome.WIN, 'Away team wins'),
+        (2, 1, 'Away Team', BetOutcome.LOSE, 'Away team loses'),
+    ],
+)
+def test_live_match_red_card_rule_outcome_determination(
+    home_score, away_score, team_analyzed, expected_outcome, description
+):
     """Test live rule outcome determination"""
     rule = LiveMatchDrawRedCardRule()
 
-    # Test home team win (we bet on home team)
     match_result = MatchSummary(
         match_id=None,
         home_team='Home Team',
@@ -518,63 +547,21 @@ def test_live_match_red_card_rule_outcome_determination():
         league='Test League',
         country='Test Country',
         match_date=None,
-        home_score=2,
-        away_score=1,
+        home_score=home_score,
+        away_score=away_score,
         red_cards_home=0,
         red_cards_away=0,
         minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN
 
-    # Test home team loss (we bet on home team)
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=2,
-        red_cards_home=0,
-        red_cards_away=0,
-        minute=None,
-    )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE
+    outcome = rule.determine_outcome(match_result, team_analyzed)
+    assert outcome == expected_outcome, f'Failed for {description}'
 
-    # Test away team win (we bet on away team)
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=1,
-        away_score=2,
-        red_cards_home=0,
-        red_cards_away=0,
-        minute=None,
-    )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN
 
-    # Test away team loss (we bet on away team)
-    match_result = MatchSummary(
-        match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
-        league='Test League',
-        country='Test Country',
-        match_date=None,
-        home_score=2,
-        away_score=1,
-        red_cards_home=0,
-        red_cards_away=0,
-        minute=None,
-    )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.LOSE
+def test_live_match_red_card_rule_incomplete_match():
+    """Test live rule with incomplete match"""
+    rule = LiveMatchDrawRedCardRule()
 
-    # Test incomplete match
     match_result = MatchSummary(
         match_id=None,
         home_team='Home Team',
@@ -588,4 +575,6 @@ def test_live_match_red_card_rule_outcome_determination():
         red_cards_away=0,
         minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Home Team') is None
+
+    outcome = rule.determine_outcome(match_result, 'Home Team')
+    assert outcome is None

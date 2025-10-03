@@ -361,17 +361,17 @@ class LiveMatchDrawRedCardRule(BettingRule):
     def evaluate_opportunity(
         self,
         match: Match,
-        home_analysis: TeamAnalysis,
-        away_analysis: TeamAnalysis,
+        home_team_analysis: TeamAnalysis,
+        away_team_analysis: TeamAnalysis,
     ) -> 'Bet | None':
         """Live-specific evaluation using red cards and current score."""
         match_summary = MatchSummary.from_match(match)
 
         home_confidence = self.calculate_confidence(
-            home_analysis, away_analysis, match_summary
+            home_team_analysis, away_team_analysis, match_summary
         )
         away_confidence = self.calculate_confidence(
-            away_analysis, home_analysis, match_summary
+            away_team_analysis, home_team_analysis, match_summary
         )
 
         if home_confidence == 0 and away_confidence == 0:
@@ -381,11 +381,11 @@ class LiveMatchDrawRedCardRule(BettingRule):
         if match_summary.red_cards_home > 0 and match_summary.red_cards_away == 0:
             # Home team has red card, bet on away team
             final_confidence = away_confidence
-            team_analyzed = away_analysis.team.name
+            team_analyzed = away_team_analysis.team.name
         elif match_summary.red_cards_away > 0 and match_summary.red_cards_home == 0:
             # Away team has red card, bet on home team
             final_confidence = home_confidence
-            team_analyzed = home_analysis.team.name
+            team_analyzed = home_team_analysis.team.name
         else:
             return None
 
@@ -396,14 +396,14 @@ class LiveMatchDrawRedCardRule(BettingRule):
             'red_cards_home': match.red_cards_home,
             'red_cards_away': match.red_cards_away,
             'minute': match.minute,
-            'home_team_rank': home_analysis.team.rank,
-            'away_team_rank': away_analysis.team.rank,
-            'home_consecutive_no_goals': home_analysis.consecutive_no_goals,
-            'away_consecutive_no_goals': away_analysis.consecutive_no_goals,
-            'home_consecutive_draws': home_analysis.consecutive_draws,
-            'away_consecutive_draws': away_analysis.consecutive_draws,
-            'home_consecutive_losses': home_analysis.consecutive_losses,
-            'away_consecutive_losses': away_analysis.consecutive_losses,
+            'home_team_rank': home_team_analysis.team.rank,
+            'away_team_rank': away_team_analysis.team.rank,
+            'home_consecutive_no_goals': home_team_analysis.consecutive_no_goals,
+            'away_consecutive_no_goals': away_team_analysis.consecutive_no_goals,
+            'home_consecutive_draws': home_team_analysis.consecutive_draws,
+            'away_consecutive_draws': away_team_analysis.consecutive_draws,
+            'home_consecutive_losses': home_team_analysis.consecutive_losses,
+            'away_consecutive_losses': away_team_analysis.consecutive_losses,
         }
 
         return Bet(
