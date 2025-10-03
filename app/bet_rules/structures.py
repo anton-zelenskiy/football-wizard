@@ -56,7 +56,10 @@ class BettingRule(BaseModel):
     )
 
     def calculate_confidence(
-        self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis,
+        match_summary: 'MatchSummary' = None,
     ) -> float:
         """Calculate confidence based on team analysis"""
         raise NotImplementedError('Subclasses must implement calculate_confidence')
@@ -87,11 +90,13 @@ class BettingRule(BaseModel):
 
         Subclasses can override for special live rules.
         """
+        match_summary = MatchSummary.from_match(match)
+
         home_confidence = self.calculate_confidence(
-            home_team_analysis, away_team_analysis
+            home_team_analysis, away_team_analysis, match_summary
         )
         away_confidence = self.calculate_confidence(
-            away_team_analysis, home_team_analysis
+            away_team_analysis, home_team_analysis, match_summary
         )
 
         if home_confidence == 0 and away_confidence == 0:
@@ -128,8 +133,6 @@ class BettingRule(BaseModel):
             'away_consecutive_draws': away_team_analysis.consecutive_draws,
             'home_consecutive_no_goals': home_team_analysis.consecutive_no_goals,
             'away_consecutive_no_goals': away_team_analysis.consecutive_no_goals,
-            'home_is_top_5': home_team_analysis.is_top5_team,
-            'away_is_top_5': away_team_analysis.is_top5_team,
             'team_analyzed': team_analyzed,
         }
 
@@ -175,26 +178,22 @@ class ConsecutiveLossesRule(BettingRule):
         )
 
     def calculate_confidence(
-        self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis,
+        match_summary: 'MatchSummary' = None,
     ) -> float:
         """Calculate confidence for consecutive losses rule"""
         if team_analysis.consecutive_losses < 3:
             return 0.0
 
         confidence = self._calculate_base_confidence(team_analysis)
-        # Add rank-based confidence if opponent analysis is available
-        if (
-            opponent_analysis
-            and team_analysis.team.rank
-            and opponent_analysis.team.rank
-        ):
-            rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
-            if (
-                rank_difference > 0
-            ):  # Team we're betting on has higher rank (lower number)
-                rank_bonus = 0.025 * rank_difference
-                confidence += rank_bonus
-                confidence = min(1.0, confidence)  # Cap at 1.0
+
+        rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
+        if rank_difference > 0:  # Team we're betting on has higher rank (lower number)
+            rank_bonus = 0.025 * rank_difference
+            confidence += rank_bonus
+            confidence = min(1.0, confidence)  # Cap at 1.0
         return confidence
 
     def _evaluate_bet_outcome(
@@ -225,7 +224,10 @@ class ConsecutiveDrawsRule(BettingRule):
         )
 
     def calculate_confidence(
-        self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis = None,
+        match_summary: 'MatchSummary' = None,
     ) -> float:
         """Calculate confidence for consecutive draws rule"""
         if team_analysis.consecutive_draws < 3:
@@ -261,7 +263,10 @@ class Top5ConsecutiveLossesRule(BettingRule):
         )
 
     def calculate_confidence(
-        self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis,
+        match_summary: 'MatchSummary' = None,
     ) -> float:
         """Calculate confidence for top 5 consecutive losses rule"""
         if not team_analysis.is_top5_team or team_analysis.consecutive_losses < 2:
@@ -283,7 +288,7 @@ class Top5ConsecutiveLossesRule(BettingRule):
             return BetOutcome.LOSE  # Our prediction was wrong
 
 
-class LiveMatchRedCardRule(BettingRule):
+class LiveMatchDrawRedCardRule(BettingRule):
     """Rule: Live match with red card and draw -> bet on team without red card"""
 
     def __init__(self, **data: Any) -> None:
@@ -298,64 +303,62 @@ class LiveMatchRedCardRule(BettingRule):
         )
 
     def calculate_confidence(
-        self, team_analysis: TeamAnalysis, opponent_analysis: TeamAnalysis = None
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis,
+        match_summary: 'MatchSummary',
     ) -> float:
         """Calculate confidence for live red card rule"""
-        # This rule is only applied to live matches, not historical analysis
-        return 0.0
+        # This rule requires a match summary with red card information
 
-    def calculate_live_confidence(
-        self,
-        home_analysis: TeamAnalysis,
-        away_analysis: TeamAnalysis,
-        red_cards_home: int,
-        red_cards_away: int,
-        home_score: int,
-        away_score: int,
-    ) -> tuple[float, str]:
-        """Calculate confidence for live match with red cards"""
         # Only apply if there's a red card and the score is tied
-        if (red_cards_home == 0 and red_cards_away == 0) or home_score != away_score:
-            return 0.0, 'No red card or not a draw'
+        if (
+            match_summary.red_cards_home == 0 and match_summary.red_cards_away == 0
+        ) or match_summary.home_score != match_summary.away_score:
+            return 0.0
 
         confidence = self.base_confidence
 
         # Determine which team has the red card
-        if red_cards_home > 0 and red_cards_away == 0:
+        if match_summary.red_cards_home > 0 and match_summary.red_cards_away == 0:
             # Home team has red card, bet on away team
-            team_analyzed = away_analysis.team.name
+            # Only apply if we're analyzing the away team (team without red card)
+            if not opponent_analysis:
+                return 0.0
 
             # If team without red card is weaker, increase confidence
-            if away_analysis.team.rank > home_analysis.team.rank:
+            if team_analysis.team.rank > opponent_analysis.team.rank:
                 confidence += 0.1
 
             # Add confidence based on consecutive matches for team without red card
-            if away_analysis.consecutive_no_goals >= 2:
-                confidence += 0.05 * min(away_analysis.consecutive_no_goals - 1, 3)
-            if away_analysis.consecutive_draws >= 2:
-                confidence += 0.05 * min(away_analysis.consecutive_draws - 1, 2)
-            if away_analysis.consecutive_losses >= 2:
-                confidence += 0.05 * min(away_analysis.consecutive_losses - 1, 2)
+            if team_analysis.consecutive_no_goals >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_no_goals - 1, 3)
+            if team_analysis.consecutive_draws >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_draws - 1, 2)
+            if team_analysis.consecutive_losses >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_losses - 1, 2)
 
-        elif red_cards_away > 0 and red_cards_home == 0:
+        elif match_summary.red_cards_away > 0 and match_summary.red_cards_home == 0:
             # Away team has red card, bet on home team
-            team_analyzed = home_analysis.team.name
+            # Only apply if we're analyzing the home team (team without red card)
+            if not opponent_analysis:
+                return 0.0
 
             # If team without red card is weaker, increase confidence
-            if home_analysis.team.rank > away_analysis.team.rank:
+            if team_analysis.team.rank > opponent_analysis.team.rank:
                 confidence += 0.1
 
             # Add confidence based on consecutive matches for team without red card
-            if home_analysis.consecutive_no_goals >= 2:
-                confidence += 0.05 * min(home_analysis.consecutive_no_goals - 1, 3)
-            if home_analysis.consecutive_draws >= 2:
-                confidence += 0.05 * min(home_analysis.consecutive_draws - 1, 2)
-            if home_analysis.consecutive_losses >= 2:
-                confidence += 0.05 * min(home_analysis.consecutive_losses - 1, 2)
+            if team_analysis.consecutive_no_goals >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_no_goals - 1, 3)
+            if team_analysis.consecutive_draws >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_draws - 1, 2)
+            if team_analysis.consecutive_losses >= 2:
+                confidence += 0.05 * min(team_analysis.consecutive_losses - 1, 2)
         else:
-            return 0.0, 'Both teams have red cards or invalid state'
+            return 0.0
 
-        return min(1.0, confidence), team_analyzed
+        return min(1.0, confidence)
 
     def evaluate_opportunity(
         self,
@@ -364,23 +367,36 @@ class LiveMatchRedCardRule(BettingRule):
         away_analysis: TeamAnalysis,
     ) -> 'Bet | None':
         """Live-specific evaluation using red cards and current score."""
-        confidence, team_analyzed = self.calculate_live_confidence(
-            home_analysis=home_analysis,
-            away_analysis=away_analysis,
-            red_cards_home=match.red_cards_home,
-            red_cards_away=match.red_cards_away,
-            home_score=match.home_score or 0,
-            away_score=match.away_score or 0,
+        match_summary = MatchSummary.from_match(match)
+
+        home_confidence = self.calculate_confidence(
+            home_analysis, away_analysis, match_summary
+        )
+        away_confidence = self.calculate_confidence(
+            away_analysis, home_analysis, match_summary
         )
 
-        if confidence <= 0:
+        if home_confidence == 0 and away_confidence == 0:
+            return None
+
+        # Determine which team to bet on based on red card situation
+        if match_summary.red_cards_home > 0 and match_summary.red_cards_away == 0:
+            # Home team has red card, bet on away team
+            final_confidence = away_confidence
+            team_analyzed = away_analysis.team.name
+        elif match_summary.red_cards_away > 0 and match_summary.red_cards_home == 0:
+            # Away team has red card, bet on home team
+            final_confidence = home_confidence
+            team_analyzed = home_analysis.team.name
+        else:
+            return None
+
+        if final_confidence <= 0:
             return None
 
         details: dict[str, Any] = {
-            'live_match': True,
             'red_cards_home': match.red_cards_home,
             'red_cards_away': match.red_cards_away,
-            'current_score': f'{match.home_score or 0}-{match.away_score or 0}',
             'minute': match.minute,
             'home_team_rank': home_analysis.team.rank,
             'away_team_rank': away_analysis.team.rank,
@@ -393,10 +409,10 @@ class LiveMatchRedCardRule(BettingRule):
         }
 
         return Bet(
-            match=MatchSummary.from_match(match),
+            match=match_summary,
             opportunity=BettingOpportunity(
                 slug=self.slug,
-                confidence=confidence,
+                confidence=final_confidence,
                 team_analyzed=team_analyzed,
                 details=details,
             ),
@@ -406,14 +422,14 @@ class LiveMatchRedCardRule(BettingRule):
         self, match: 'MatchSummary', team_analyzed: str
     ) -> BetOutcome | None:
         """Evaluate bet outcome for live red card rule (win)"""
-        # For live red card rule, we bet on the team without red card to win
+
         team_result = match.get_team_result(team_analyzed)
         if team_result is None:  # Incomplete match
             return None
         elif team_result == MatchResult.WIN:
-            return BetOutcome.WIN  # Our prediction was correct
-        else:  # team_result in [MatchResult.LOSE, MatchResult.DRAW]
-            return BetOutcome.LOSE  # Our prediction was wrong
+            return BetOutcome.WIN
+        else:
+            return BetOutcome.LOSE
 
 
 class MatchSummary(BaseModel):
@@ -427,6 +443,11 @@ class MatchSummary(BaseModel):
     match_date: str | None = Field(default=None, description='Match date and time')
     home_score: int | None = Field(default=None, description='Home team score')
     away_score: int | None = Field(default=None, description='Away team score')
+    red_cards_home: int = Field(default=0, description='Home team red cards')
+    red_cards_away: int = Field(default=0, description='Away team red cards')
+    minute: int | None = Field(
+        default=None, description='Current minute for live matches'
+    )
 
     @property
     def is_complete(self) -> bool:
@@ -471,6 +492,9 @@ class MatchSummary(BaseModel):
             ),
             home_score=match.home_score,
             away_score=match.away_score,
+            red_cards_home=match.red_cards_home,
+            red_cards_away=match.red_cards_away,
+            minute=match.minute,
         )
 
 

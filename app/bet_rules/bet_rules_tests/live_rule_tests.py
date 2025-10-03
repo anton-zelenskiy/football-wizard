@@ -1,17 +1,15 @@
-"""Tests for LiveMatchRedCardRule"""
-
 from app.bet_rules.structures import (
     BetOutcome,
     BetType,
-    LiveMatchRedCardRule,
+    LiveMatchDrawRedCardRule,
     MatchSummary,
 )
 from app.bet_rules.team_analysis import Team, TeamAnalysis
 
 
 def test_live_match_red_card_rule_creation():
-    """Test LiveMatchRedCardRule creation and properties"""
-    rule = LiveMatchRedCardRule()
+    """Test LiveMatchDrawRedCardRule creation and properties"""
+    rule = LiveMatchDrawRedCardRule()
 
     assert rule.name == 'Live Match Red Card Rule'
     assert (
@@ -25,7 +23,7 @@ def test_live_match_red_card_rule_creation():
 
 def test_live_match_red_card_rule_historical_analysis():
     """Test that live rule returns 0 for historical analysis"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analysis
     team_analysis = TeamAnalysis(
@@ -43,7 +41,7 @@ def test_live_match_red_card_rule_historical_analysis():
 
 def test_live_match_red_card_rule_no_red_card():
     """Test live rule with no red cards"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -62,23 +60,30 @@ def test_live_match_red_card_rule_no_red_card():
         consecutive_no_goals=0,
     )
 
-    # No red cards, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=0,
-        red_cards_away=0,
+    # Create match summary with no red cards, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=75,
     )
 
+    # No red cards, tied score
+    confidence = rule.calculate_confidence(home_analysis, away_analysis, match_summary)
+
     assert confidence == 0.0
-    assert team_analyzed == 'No red card or not a draw'
 
 
 def test_live_match_red_card_rule_not_draw():
     """Test live rule with red card but not a draw"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -97,23 +102,30 @@ def test_live_match_red_card_rule_not_draw():
         consecutive_no_goals=0,
     )
 
-    # Red card but not a draw
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with red card but not a draw
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=2,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
 
+    # Red card but not a draw
+    confidence = rule.calculate_confidence(home_analysis, away_analysis, match_summary)
+
     assert confidence == 0.0
-    assert team_analyzed == 'No red card or not a draw'
 
 
 def test_live_match_red_card_rule_home_team_red_card():
     """Test live rule with home team having red card"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -132,23 +144,30 @@ def test_live_match_red_card_rule_home_team_red_card():
         consecutive_no_goals=0,
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
 
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
+
     assert confidence == 0.6  # Base 0.5 + 0.1 for weaker team (rank 2 > rank 1)
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_away_team_red_card():
     """Test live rule with away team having red card"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -167,23 +186,30 @@ def test_live_match_red_card_rule_away_team_red_card():
         consecutive_no_goals=0,
     )
 
-    # Away team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=0,
-        red_cards_away=1,
+    # Create match summary with away team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=0,
+        red_cards_away=1,
+        minute=75,
     )
 
+    # Away team has red card, tied score - bet on home team
+    confidence = rule.calculate_confidence(home_analysis, away_analysis, match_summary)
+
     assert confidence == 0.5  # Base confidence
-    assert team_analyzed == 'Home Team'
 
 
 def test_live_match_red_card_rule_weaker_team_advantage():
     """Test live rule with weaker team without red card getting advantage"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses - away team is weaker (higher rank)
     home_analysis = TeamAnalysis(
@@ -202,23 +228,30 @@ def test_live_match_red_card_rule_weaker_team_advantage():
         consecutive_no_goals=0,
     )
 
-    # Home team has red card, tied score, away team is weaker
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
 
+    # Home team has red card, tied score, away team is weaker - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
+
     assert confidence == 0.6  # Base 0.5 + 0.1 for weaker team
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_consecutive_no_goals_bonus():
     """Test live rule with consecutive no goals bonus"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -237,24 +270,31 @@ def test_live_match_red_card_rule_consecutive_no_goals_bonus():
         consecutive_no_goals=3,  # 3 consecutive no goals
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
+
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
 
     # Base 0.5 + 0.1 (weaker team) + 0.05 * (3-1) = 0.5 + 0.1 + 0.1 = 0.7
     assert confidence == 0.7
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_consecutive_draws_bonus():
     """Test live rule with consecutive draws bonus"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -273,24 +313,31 @@ def test_live_match_red_card_rule_consecutive_draws_bonus():
         consecutive_no_goals=0,
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
+
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
 
     # Base 0.5 + 0.1 (weaker team) + 0.05 * (3-1) = 0.5 + 0.1 + 0.1 = 0.7
     assert confidence == 0.7
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_consecutive_losses_bonus():
     """Test live rule with consecutive losses bonus"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -309,24 +356,31 @@ def test_live_match_red_card_rule_consecutive_losses_bonus():
         consecutive_no_goals=0,
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
+
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
 
     # Base 0.5 + 0.1 (weaker team) + 0.05 * (3-1) = 0.5 + 0.1 + 0.1 = 0.7
     assert confidence == 0.7
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_multiple_bonuses():
     """Test live rule with multiple bonuses"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -345,24 +399,31 @@ def test_live_match_red_card_rule_multiple_bonuses():
         consecutive_no_goals=2,  # 2 consecutive no goals
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
+
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
 
     # Base 0.5 + 0.1 (weaker team) + 0.05 (no goals) + 0.05 (draws) + 0.05 (losses) = 0.75
     assert abs(confidence - 0.75) < 0.001  # Handle floating point precision
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_confidence_cap():
     """Test that confidence is capped at 1.0"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses with high bonuses
     home_analysis = TeamAnalysis(
@@ -381,24 +442,31 @@ def test_live_match_red_card_rule_confidence_cap():
         consecutive_no_goals=5,  # 5 consecutive no goals
     )
 
-    # Home team has red card, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=0,
+    # Create match summary with home team red card, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=0,
+        minute=75,
     )
+
+    # Home team has red card, tied score - bet on away team
+    confidence = rule.calculate_confidence(away_analysis, home_analysis, match_summary)
 
     # Should be high confidence (0.95) but not necessarily 1.0 due to bonus caps
     assert confidence >= 0.9
-    assert team_analyzed == 'Away Team'
 
 
 def test_live_match_red_card_rule_both_teams_red_cards():
     """Test live rule with both teams having red cards"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Create team analyses
     home_analysis = TeamAnalysis(
@@ -417,23 +485,30 @@ def test_live_match_red_card_rule_both_teams_red_cards():
         consecutive_no_goals=0,
     )
 
-    # Both teams have red cards, tied score
-    confidence, team_analyzed = rule.calculate_live_confidence(
-        home_analysis=home_analysis,
-        away_analysis=away_analysis,
-        red_cards_home=1,
-        red_cards_away=1,
+    # Create match summary with both teams having red cards, tied score
+    match_summary = MatchSummary(
+        match_id=None,
+        home_team='Home Team',
+        away_team='Away Team',
+        league='Test League',
+        country='Test Country',
+        match_date=None,
         home_score=1,
         away_score=1,
+        red_cards_home=1,
+        red_cards_away=1,
+        minute=75,
     )
 
+    # Both teams have red cards, tied score
+    confidence = rule.calculate_confidence(home_analysis, away_analysis, match_summary)
+
     assert confidence == 0.0
-    assert team_analyzed == 'Both teams have red cards or invalid state'
 
 
 def test_live_match_red_card_rule_outcome_determination():
     """Test live rule outcome determination"""
-    rule = LiveMatchRedCardRule()
+    rule = LiveMatchDrawRedCardRule()
 
     # Test home team win (we bet on home team)
     match_result = MatchSummary(
@@ -445,8 +520,11 @@ def test_live_match_red_card_rule_outcome_determination():
         match_date=None,
         home_score=2,
         away_score=1,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN.value
+    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.WIN
 
     # Test home team loss (we bet on home team)
     match_result = MatchSummary(
@@ -458,8 +536,11 @@ def test_live_match_red_card_rule_outcome_determination():
         match_date=None,
         home_score=1,
         away_score=2,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE.value
+    assert rule.determine_outcome(match_result, 'Home Team') == BetOutcome.LOSE
 
     # Test away team win (we bet on away team)
     match_result = MatchSummary(
@@ -471,8 +552,11 @@ def test_live_match_red_card_rule_outcome_determination():
         match_date=None,
         home_score=1,
         away_score=2,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN.value
+    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.WIN
 
     # Test away team loss (we bet on away team)
     match_result = MatchSummary(
@@ -484,8 +568,11 @@ def test_live_match_red_card_rule_outcome_determination():
         match_date=None,
         home_score=2,
         away_score=1,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=None,
     )
-    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.LOSE.value
+    assert rule.determine_outcome(match_result, 'Away Team') == BetOutcome.LOSE
 
     # Test incomplete match
     match_result = MatchSummary(
@@ -497,5 +584,8 @@ def test_live_match_red_card_rule_outcome_determination():
         match_date=None,
         home_score=None,
         away_score=None,
+        red_cards_home=0,
+        red_cards_away=0,
+        minute=None,
     )
     assert rule.determine_outcome(match_result, 'Home Team') is None
