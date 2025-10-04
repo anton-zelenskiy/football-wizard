@@ -5,7 +5,8 @@ import structlog
 
 from app.bet_rules.structures import Bet
 from app.db.models import BettingOpportunity
-from app.db.storage import FootballDataStorage
+from app.db.repositories.telegram_user_repository import TelegramUserRepository
+from app.db.session import get_async_db_session
 
 
 logger = structlog.get_logger()
@@ -27,10 +28,11 @@ def get_bot_instance() -> Any:
 
 async def send_betting_opportunity(opportunity: Bet) -> None:
     """Send betting opportunity to users subscribed to live notifications"""
+    session = get_async_db_session()
     try:
-        # Get users subscribed to live notifications
-        storage = FootballDataStorage()
-        users = storage.get_users_for_live_notifications()
+        # Get users subscribed to live notifications using our repository
+        repo = TelegramUserRepository(session)
+        users = await repo.get_users_for_live_notifications()
         bot = get_bot_instance()
 
         message_text = _format_opportunity_message(opportunity)
@@ -41,10 +43,10 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     user.telegram_id, message_text, parse_mode='HTML'
                 )
 
-                # Log the notification
-                storage.log_notification(
+                # Log the notification using our repository
+                await repo.log_notification(
                     user=user,
-                    opportunity=None,  # Will be set when we have DB opportunity
+                    opportunity_id=None,  # Will be set when we have DB opportunity
                     message=message_text,
                     success=True,
                 )
@@ -58,10 +60,10 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     error=str(e),
                 )
 
-                # Log the failed notification
-                storage.log_notification(
+                # Log the failed notification using our repository
+                await repo.log_notification(
                     user=user,
-                    opportunity=None,
+                    opportunity_id=None,
                     message=message_text,
                     success=False,
                     error_message=str(e),
@@ -71,6 +73,8 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
 
     except Exception as e:
         logger.error('Error sending betting opportunities', error=str(e))
+    finally:
+        await session.close()
 
 
 def _format_opportunity_message(opportunity: Bet) -> str:
@@ -102,9 +106,11 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
     if not opportunities:
         return
 
+    session = get_async_db_session()
     try:
-        storage = FootballDataStorage()
-        users = storage.get_users_for_daily_notifications()
+        # Get users subscribed to daily notifications using our repository
+        repo = TelegramUserRepository(session)
+        users = await repo.get_users_for_daily_notifications()
         bot = get_bot_instance()
 
         # Sort opportunities by confidence (highest first)
@@ -130,6 +136,8 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
 
     except Exception as e:
         logger.error('Error sending daily summary', error=str(e))
+    finally:
+        await session.close()
 
 
 def _format_daily_summary(opportunities: list[Bet]) -> str:
