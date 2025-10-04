@@ -3,12 +3,14 @@
 Unit tests for TeamAnalysis and TeamAnalysisService classes
 """
 
-from unittest.mock import Mock
-
 import pytest
 
-from app.bet_rules.team_analysis import TeamAnalysis, TeamAnalysisService
-from app.db.models import League, Match, Team
+from app.bet_rules.team_analysis import (
+    MatchData,
+    TeamAnalysis,
+    TeamAnalysisService,
+    TeamData,
+)
 
 
 @pytest.fixture
@@ -18,35 +20,32 @@ def team_analysis_service():
 
 
 @pytest.fixture
-def mock_league():
-    """Create a mock league for testing"""
-    league = Mock(spec=League)
-    league.name = 'Test League'
-    league.country = 'Test Country'
-    return league
-
-
-@pytest.fixture
 def mock_teams():
     """Create mock teams for testing"""
-    home_team = Mock(spec=Team)
-    home_team.name = 'Home Team'
-    home_team.rank = 5
-    home_team.league = Mock(spec=League)
-    home_team.league.name = 'Test League'
-    home_team.league.country = 'Test Country'
-
-    away_team = Mock(spec=Team)
-    away_team.name = 'Away Team'
-    away_team.rank = 15
-    away_team.league = Mock(spec=League)
-    away_team.league.name = 'Test League'
-    away_team.league.country = 'Test Country'
-
+    home_team = TeamData(id=1, name='Home Team', rank=5)
+    away_team = TeamData(id=2, name='Away Team', rank=15)
     return home_team, away_team
 
 
-def create_team_analysis_from_dict(team, analysis_dict):
+def create_match_data(
+    home_team_id: int,
+    away_team_id: int,
+    home_score: int,
+    away_score: int,
+    match_id: int = 1,
+) -> MatchData:
+    """Helper function to create MatchData for testing"""
+    return MatchData(
+        id=match_id,
+        home_team_id=home_team_id,
+        away_team_id=away_team_id,
+        home_score=home_score,
+        away_score=away_score,
+        status='finished',
+    )
+
+
+def create_team_analysis_from_dict(team: TeamData, analysis_dict):
     """Helper function to create TeamAnalysis from dictionary for testing"""
     # Calculate wins, draws, losses from win_rate if not provided
     total_matches = analysis_dict.get(
@@ -72,8 +71,6 @@ def create_team_analysis_from_dict(team, analysis_dict):
         wins=wins,
         draws=draws,
         losses=losses,
-        is_top_team=analysis_dict.get('is_top_team', False),
-        is_top5_team=analysis_dict.get('is_top5_team', False),
     )
 
 
@@ -87,26 +84,18 @@ def test_analyze_team_performance(team_analysis_service, mock_teams):
     """Test team performance analysis"""
     home_team, _ = mock_teams
 
-    # Mock recent matches with varied outcomes
+    # Create recent matches with varied outcomes
     mock_matches = []
     for i in range(10):
-        match = Mock(spec=Match)
-        match.home_team = home_team
-        match.away_team = Mock(spec=Team)
-
         # Create a pattern: first 3 wins, then 2 losses, then 2 draws, then 3 wins
         if i < 3:
-            match.home_score = 2
-            match.away_score = 0
+            match = create_match_data(home_team.id, 2, 2, 0, i + 1)
         elif i < 5:
-            match.home_score = 0
-            match.away_score = 1
+            match = create_match_data(home_team.id, 2, 0, 1, i + 1)
         elif i < 7:
-            match.home_score = 1
-            match.away_score = 1
+            match = create_match_data(home_team.id, 2, 1, 1, i + 1)
         else:
-            match.home_score = 2
-            match.away_score = 1
+            match = create_match_data(home_team.id, 2, 2, 1, i + 1)
 
         mock_matches.append(match)
 
@@ -155,12 +144,8 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
     ]
 
     win_matches = []
-    for home_score, away_score in win_pattern:
-        match = Mock(spec=Match)
-        match.home_team = home_team
-        match.away_team = Mock(spec=Team)
-        match.home_score = home_score
-        match.away_score = away_score
+    for i, (home_score, away_score) in enumerate(win_pattern):
+        match = create_match_data(home_team.id, 2, home_score, away_score, i + 1)
         win_matches.append(match)
 
     # Consecutive wins should be 3 from the beginning (most recent)
@@ -179,12 +164,8 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
     ]
 
     no_goals_matches = []
-    for home_score, away_score in no_goals_pattern:
-        match = Mock(spec=Match)
-        match.home_team = home_team
-        match.away_team = Mock(spec=Team)
-        match.home_score = home_score
-        match.away_score = away_score
+    for i, (home_score, away_score) in enumerate(no_goals_pattern):
+        match = create_match_data(home_team.id, 2, home_score, away_score, i + 1)
         no_goals_matches.append(match)
 
     # Consecutive no-goals should be 2 from the beginning (most recent)
@@ -204,12 +185,8 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
     ]
 
     mixed_matches = []
-    for home_score, away_score in mixed_pattern:
-        match = Mock(spec=Match)
-        match.home_team = home_team
-        match.away_team = Mock(spec=Team)
-        match.home_score = home_score
-        match.away_score = away_score
+    for i, (home_score, away_score) in enumerate(mixed_pattern):
+        match = create_match_data(home_team.id, 2, home_score, away_score, i + 1)
         mixed_matches.append(match)
 
     # Consecutive draws should be 0 since most recent match is not a draw
@@ -266,11 +243,7 @@ def test_analyze_team_performance_with_single_match(team_analysis_service, mock_
     home_team, _ = mock_teams
 
     # Single match - home team wins
-    match = Mock(spec=Match)
-    match.home_team = home_team
-    match.away_team = Mock(spec=Team)
-    match.home_score = 2
-    match.away_score = 0
+    match = create_match_data(home_team.id, 2, 2, 0)
 
     # Use the team analysis service directly
     analysis = team_analysis_service.analyze_team_performance(home_team, [match])
@@ -294,11 +267,7 @@ def test_team_won_lost_drew(team_analysis_service, mock_teams):
     home_team, away_team = mock_teams
 
     # Test team won
-    match = Mock(spec=Match)
-    match.home_team = home_team
-    match.away_team = away_team
-    match.home_score = 2
-    match.away_score = 1
+    match = create_match_data(home_team.id, away_team.id, 2, 1)
 
     assert team_analysis_service._team_won(match, home_team) is True
     assert team_analysis_service._team_won(match, away_team) is False
@@ -307,8 +276,7 @@ def test_team_won_lost_drew(team_analysis_service, mock_teams):
     assert team_analysis_service._team_drew(match, home_team) is False
 
     # Test draw
-    match.home_score = 1
-    match.away_score = 1
+    match = create_match_data(home_team.id, away_team.id, 1, 1)
     assert team_analysis_service._team_drew(match, home_team) is True
 
 
@@ -317,30 +285,20 @@ def test_team_no_goals(team_analysis_service, mock_teams):
     home_team, away_team = mock_teams
 
     # Test home team scored no goals
-    match = Mock(spec=Match)
-    match.home_team = home_team
-    match.away_team = away_team
-    match.home_score = 0
-    match.away_score = 2
-
-    # Ensure scores are integers, not None
-    assert match.home_score is not None
-    assert match.away_score is not None
+    match = create_match_data(home_team.id, away_team.id, 0, 2)
 
     # The home team scored 0 goals, so _team_no_goals should return True
     assert team_analysis_service._team_no_goals(match, home_team) is True
     assert team_analysis_service._team_no_goals(match, away_team) is False
 
     # Test away team scored no goals
-    match.home_score = 2
-    match.away_score = 0
+    match = create_match_data(home_team.id, away_team.id, 2, 0)
 
     assert team_analysis_service._team_no_goals(match, home_team) is False
     assert team_analysis_service._team_no_goals(match, away_team) is True
 
     # Test both teams scored goals
-    match.home_score = 1
-    match.away_score = 1
+    match = create_match_data(home_team.id, away_team.id, 1, 1)
 
     assert team_analysis_service._team_no_goals(match, home_team) is False
     assert team_analysis_service._team_no_goals(match, away_team) is False
@@ -350,11 +308,14 @@ def test_team_result_methods_with_none_scores(team_analysis_service, mock_teams)
     """Test team result methods with None scores"""
     home_team, away_team = mock_teams
 
-    match = Mock(spec=Match)
-    match.home_team = home_team
-    match.away_team = away_team
-    match.home_score = None
-    match.away_score = None
+    match = MatchData(
+        id=1,
+        home_team_id=home_team.id,
+        away_team_id=away_team.id,
+        home_score=None,
+        away_score=None,
+        status='scheduled',
+    )
 
     # All methods should return False when scores are None
     assert team_analysis_service._team_won(match, home_team) is False
@@ -369,11 +330,14 @@ def test_team_result_methods_with_partial_none_scores(
     """Test team result methods with partial None scores"""
     home_team, away_team = mock_teams
 
-    match = Mock(spec=Match)
-    match.home_team = home_team
-    match.away_team = away_team
-    match.home_score = 2
-    match.away_score = None
+    match = MatchData(
+        id=1,
+        home_team_id=home_team.id,
+        away_team_id=away_team.id,
+        home_score=2,
+        away_score=None,
+        status='live',
+    )
 
     # All methods should return False when one score is None
     assert team_analysis_service._team_won(match, home_team) is False
@@ -490,17 +454,8 @@ def test_goals_calculations(mock_teams):
     home_team, away_team = mock_teams
 
     # Create mock matches
-    match1 = Mock(spec=Match)
-    match1.home_team = home_team
-    match1.away_team = away_team
-    match1.home_score = 2
-    match1.away_score = 1
-
-    match2 = Mock(spec=Match)
-    match2.home_team = home_team
-    match2.away_team = away_team
-    match2.home_score = 1
-    match2.away_score = 0
+    match1 = create_match_data(home_team.id, away_team.id, 2, 1, 1)
+    match2 = create_match_data(home_team.id, away_team.id, 1, 0, 2)
 
     analysis = TeamAnalysis(
         team=home_team,

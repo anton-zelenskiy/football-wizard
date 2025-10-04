@@ -6,8 +6,7 @@ from app.bet_rules.structures import (
     ConsecutiveLossesRule,
     MatchSummary,
 )
-from app.bet_rules.team_analysis import TeamAnalysis
-from app.db.models import Team
+from app.bet_rules.team_analysis import TeamAnalysis, TeamData
 
 
 def create_team_analysis(
@@ -19,9 +18,7 @@ def create_team_analysis(
     recent_matches=None,
 ):
     """Helper function to create TeamAnalysis"""
-    team = Team()
-    team.name = 'Test Team'
-    team.rank = rank
+    team = TeamData(id=1, name='Test Team', rank=rank)
 
     analysis = TeamAnalysis(
         team=team,

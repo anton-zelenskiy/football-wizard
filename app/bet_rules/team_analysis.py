@@ -1,13 +1,31 @@
 from pydantic import BaseModel, Field, computed_field
 
-from app.db.models import Match, Team
+
+class TeamData(BaseModel):
+    """Pydantic model for team data in analysis"""
+
+    id: int
+    name: str
+    rank: int | None = None
+
+
+class MatchData(BaseModel):
+    """Pydantic model for match data in analysis"""
+
+    id: int
+    home_team_id: int
+    away_team_id: int
+    home_score: int | None = None
+    away_score: int | None = None
+    match_date: str | None = None
+    status: str
 
 
 class TeamAnalysis(BaseModel):
     """Comprehensive team performance analysis"""
 
     # Core team info
-    team: Team
+    team: TeamData
     rank: int | None = Field(default=None, description='Team rank in league')
 
     # Consecutive streaks
@@ -22,7 +40,7 @@ class TeamAnalysis(BaseModel):
     )
 
     # Match statistics
-    recent_matches: list[Match] = Field(
+    recent_matches: list[MatchData] = Field(
         default_factory=list, description='Recent matches for analysis'
     )
     total_matches: int = Field(
@@ -56,7 +74,7 @@ class TeamAnalysis(BaseModel):
     def goals_scored(self) -> int:
         """Total goals scored in recent matches"""
         return sum(
-            match.home_score if match.home_team == self.team else match.away_score
+            match.home_score if match.home_team_id == self.team.id else match.away_score
             for match in self.recent_matches
             if match.home_score is not None and match.away_score is not None
         )
@@ -66,7 +84,7 @@ class TeamAnalysis(BaseModel):
     def goals_conceded(self) -> int:
         """Total goals conceded in recent matches"""
         return sum(
-            match.away_score if match.home_team == self.team else match.home_score
+            match.away_score if match.home_team_id == self.team.id else match.home_score
             for match in self.recent_matches
             if match.home_score is not None and match.away_score is not None
         )
@@ -83,9 +101,6 @@ class TeamAnalysis(BaseModel):
         """Is team in top 5 (rank <= 5)"""
         return self.rank is not None and self.rank <= 5
 
-    class Config:
-        arbitrary_types_allowed = True  # Allow Team and Match objects
-
 
 class TeamAnalysisService:
     """Service for analyzing team performance"""
@@ -97,7 +112,7 @@ class TeamAnalysisService:
         self.min_consecutive_losses = min_consecutive_losses
 
     def analyze_team_performance(
-        self, team: Team, recent_matches: list[Match]
+        self, team: TeamData, recent_matches: list[MatchData]
     ) -> TeamAnalysis:
         """Analyze a team's recent performance comprehensively"""
 
@@ -141,7 +156,7 @@ class TeamAnalysisService:
         return analysis
 
     def _calculate_consecutive_streak(
-        self, matches: list[Match], team: Team, streak_type: str
+        self, matches: list[MatchData], team: TeamData, streak_type: str
     ) -> int:
         """Calculate consecutive streak for a specific type (win, loss, draw, no_goals, goals)"""
         streak = 0
@@ -162,39 +177,39 @@ class TeamAnalysisService:
 
         return streak
 
-    def _team_won(self, match: Match, team: Team) -> bool:
+    def _team_won(self, match: MatchData, team: TeamData) -> bool:
         """Check if team won the match"""
         if match.home_score is None or match.away_score is None:
             return False
 
-        if match.home_team == team:
+        if match.home_team_id == team.id:
             return match.home_score > match.away_score
         else:
             return match.away_score > match.home_score
 
-    def _team_lost(self, match: Match, team: Team) -> bool:
+    def _team_lost(self, match: MatchData, team: TeamData) -> bool:
         """Check if team lost the match"""
         if match.home_score is None or match.away_score is None:
             return False
 
-        if match.home_team == team:
+        if match.home_team_id == team.id:
             return match.home_score < match.away_score
         else:
             return match.away_score < match.home_score
 
-    def _team_drew(self, match: Match, team: Team) -> bool:
+    def _team_drew(self, match: MatchData, team: TeamData) -> bool:
         """Check if team drew the match"""
         if match.home_score is None or match.away_score is None:
             return False
 
         return match.home_score == match.away_score
 
-    def _team_no_goals(self, match: Match, team: Team) -> bool:
+    def _team_no_goals(self, match: MatchData, team: TeamData) -> bool:
         """Check if team scored no goals in the match"""
         if match.home_score is None or match.away_score is None:
             return False
 
-        if match.home_team == team:
+        if match.home_team_id == team.id:
             return match.home_score == 0
         else:
             return match.away_score == 0
