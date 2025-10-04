@@ -77,6 +77,20 @@ class Match(BaseModel):
     class Meta:
         indexes = ((('league', 'home_team', 'away_team', 'season'), True),)
 
+    def to_pydantic(self):
+        """Convert Peewee Match model to Pydantic MatchData"""
+        from app.bet_rules.team_analysis import MatchData
+
+        return MatchData(
+            id=self.id,
+            home_team_id=self.home_team.id,
+            away_team_id=self.away_team.id,
+            home_score=self.home_score,
+            away_score=self.away_score,
+            match_date=self.match_date.isoformat() if self.match_date else None,
+            status=self.status,
+        )
+
 
 class BettingOpportunity(BaseModel):
     id = AutoField()

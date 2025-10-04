@@ -1,7 +1,7 @@
 import structlog
 
 from app.bet_rules.rule_engine import BettingRulesEngine
-from app.bet_rules.structures import Bet
+from app.bet_rules.structures import Bet, MatchSummary
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
 from app.db.storage import FootballDataStorage, LeagueData
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
@@ -26,8 +26,11 @@ class BettingTasks:
 
             for match in scheduled_matches:
                 try:
-                    # Analyze the match
-                    match_opportunities = self.rules_engine.analyze_match(match)
+                    # Convert Match to MatchSummary and populate recent matches
+                    match_summary = self._create_match_summary_with_recent_matches(
+                        match
+                    )
+                    match_opportunities = self.rules_engine.analyze_match(match_summary)
                     all_opportunities.extend(match_opportunities)
 
                 except Exception as e:
@@ -88,8 +91,11 @@ class BettingTasks:
 
             for match in live_matches:
                 try:
-                    # Analyze the live match
-                    match_opportunities = self.rules_engine.analyze_match(match)
+                    # Convert Match to MatchSummary and populate recent matches
+                    match_summary = self._create_match_summary_with_recent_matches(
+                        match
+                    )
+                    match_opportunities = self.rules_engine.analyze_match(match_summary)
                     all_opportunities.extend(match_opportunities)
 
                 except Exception as e:
@@ -277,6 +283,28 @@ class BettingTasks:
                 continue
 
         return saved_count
+
+    def _create_match_summary_with_recent_matches(self, match) -> MatchSummary:
+        """Create MatchSummary with populated recent matches for both teams"""
+        # Get recent matches for both teams
+        home_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
+            match.home_team.id, match.season, match.round, self.rules_engine.rounds_back
+        )
+        away_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
+            match.away_team.id, match.season, match.round, self.rules_engine.rounds_back
+        )
+
+        # Convert to Pydantic models
+        home_matches_data = [m.to_pydantic() for m in home_recent_matches]
+        away_matches_data = [m.to_pydantic() for m in away_recent_matches]
+
+        # Create MatchSummary with recent matches and team data
+        match_summary = MatchSummary.from_match(match)
+        match_summary.home_recent_matches = home_matches_data
+        match_summary.away_recent_matches = away_matches_data
+
+        # Team data is already populated by from_match method
+        return match_summary
 
 
 # Task functions for arq

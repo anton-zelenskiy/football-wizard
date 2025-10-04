@@ -196,8 +196,16 @@ class FootballDataStorage:
             else:
                 logger.debug(f'Updated team statistics: {team.name}')
 
+    def get_team_by_id(self, team_id: int) -> Team | None:
+        """Get team by ID"""
+        try:
+            return Team.get_by_id(team_id)
+        except Team.DoesNotExist:
+            logger.warning(f'Team with ID {team_id} not found')
+            return None
+
     def get_team_matches_by_season_and_rounds(
-        self, team: Team, season: int, current_round: int, rounds_back: int = 5
+        self, team_id: int, season: int, current_round: int, rounds_back: int = 5
     ) -> list[Match]:
         """Get team matches from specific season and rounds for analysis"""
         try:
@@ -206,17 +214,14 @@ class FootballDataStorage:
             end_round = current_round - 1  # Exclude current round
 
             if end_round < start_round:
-                logger.warning(
-                    f'No previous rounds available for {team.name} in season {season}, '
-                    f'current round: {current_round}'
-                )
+                logger.warning('No previous rounds available')
                 return []
 
             # Get matches where team participated in the specified season and rounds
             matches = (
                 Match.select()
                 .where(
-                    ((Match.home_team == team) | (Match.away_team == team))
+                    ((Match.home_team_id == team_id) | (Match.away_team_id == team_id))
                     & (Match.season == season)
                     & (Match.round >= start_round)
                     & (Match.round <= end_round)
@@ -226,13 +231,13 @@ class FootballDataStorage:
             )
             match_list = list(matches)
             logger.debug(
-                f'Found {len(match_list)} matches for {team.name} in season {season}, '
+                f'Found {len(match_list)} matches for team {team_id} in season {season}, '
                 f'rounds {start_round}-{end_round} (current: {current_round})'
             )
             return match_list
         except Exception as e:
             logger.error(
-                f'Error getting matches for {team.name} season {season} '
+                f'Error getting matches for team {team_id} season {season} '
                 f'rounds {current_round - rounds_back}-{current_round - 1}: {e}'
             )
             return []

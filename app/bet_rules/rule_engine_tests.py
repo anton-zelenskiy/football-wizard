@@ -145,13 +145,13 @@ def test_get_team_matches_by_season_and_rounds(test_db):
     )
 
     # Test getting matches for round 10 (should get rounds 5-9)
-    matches = storage.get_team_matches_by_season_and_rounds(team, 2024, 10, 5)
+    matches = storage.get_team_matches_by_season_and_rounds(team.id, 2024, 10, 5)
 
     # Should find the 2 matches we created (rounds 5 and 6)
     assert len(matches) == 2
 
     # Test getting matches for round 3 (should get rounds 1-2, but we have none)
-    matches = storage.get_team_matches_by_season_and_rounds(team, 2024, 3, 5)
+    matches = storage.get_team_matches_by_season_and_rounds(team.id, 2024, 3, 5)
     assert len(matches) == 0
 
 
@@ -164,9 +164,9 @@ def test_get_team_matches_by_season_and_rounds_edge_cases(test_db):
     team, _ = Team.get_or_create(name='Test Team 6', league=league, rank=1)
 
     # Test with round 1 (no previous rounds)
-    matches = storage.get_team_matches_by_season_and_rounds(team, 2024, 1, 5)
+    matches = storage.get_team_matches_by_season_and_rounds(team.id, 2024, 1, 5)
     assert len(matches) == 0
 
     # Test with round 2 (should get round 1)
-    matches = storage.get_team_matches_by_season_and_rounds(team, 2024, 2, 5)
+    matches = storage.get_team_matches_by_season_and_rounds(team.id, 2024, 2, 5)
     assert len(matches) == 0  # No matches in round 1

@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Union
 
 from pydantic import BaseModel, Field
 
-from app.bet_rules.team_analysis import TeamAnalysis
+from app.bet_rules.team_analysis import MatchData, TeamAnalysis, TeamData
 from app.db.models import Match
 
 
@@ -82,7 +82,7 @@ class BettingRule(BaseModel):
 
     def evaluate_opportunity(
         self,
-        match: Match,
+        match: 'MatchSummary',
         home_team_analysis: TeamAnalysis,
         away_team_analysis: TeamAnalysis,
     ) -> 'Bet | None':
@@ -90,7 +90,7 @@ class BettingRule(BaseModel):
 
         Subclasses can override for special live rules.
         """
-        match_summary = MatchSummary.from_match(match)
+        match_summary = match
 
         home_confidence = self.calculate_confidence(
             home_team_analysis, away_team_analysis, match_summary
@@ -360,12 +360,12 @@ class LiveMatchDrawRedCardRule(BettingRule):
 
     def evaluate_opportunity(
         self,
-        match: Match,
+        match: 'MatchSummary',
         home_team_analysis: TeamAnalysis,
         away_team_analysis: TeamAnalysis,
     ) -> 'Bet | None':
         """Live-specific evaluation using red cards and current score."""
-        match_summary = MatchSummary.from_match(match)
+        match_summary = match
 
         home_confidence = self.calculate_confidence(
             home_team_analysis, away_team_analysis, match_summary
@@ -436,6 +436,14 @@ class MatchSummary(BaseModel):
     match_id: int | None = Field(default=None, description='Match ID')
     home_team: str = Field(description='Home team name')
     away_team: str = Field(description='Away team name')
+    home_team_id: int | None = Field(default=None, description='Home team ID')
+    away_team_id: int | None = Field(default=None, description='Away team ID')
+    home_team_data: Union['TeamData', None] = Field(
+        default=None, description='Home team data for analysis'
+    )
+    away_team_data: Union['TeamData', None] = Field(
+        default=None, description='Away team data for analysis'
+    )
     league: str = Field(description='League name')
     country: str = Field(description='Country name')
     match_date: str | None = Field(default=None, description='Match date and time')
@@ -445,6 +453,14 @@ class MatchSummary(BaseModel):
     red_cards_away: int = Field(default=0, description='Away team red cards')
     minute: int | None = Field(
         default=None, description='Current minute for live matches'
+    )
+    season: int | None = Field(default=None, description='Season year')
+    round: int | None = Field(default=None, description='Round number')
+    home_recent_matches: list['MatchData'] = Field(
+        default_factory=list, description='Home team recent matches for analysis'
+    )
+    away_recent_matches: list['MatchData'] = Field(
+        default_factory=list, description='Away team recent matches for analysis'
     )
 
     @property
@@ -481,6 +497,18 @@ class MatchSummary(BaseModel):
             match_id=match.id,
             home_team=match.home_team.name,
             away_team=match.away_team.name,
+            home_team_id=match.home_team.id,
+            away_team_id=match.away_team.id,
+            home_team_data=TeamData(
+                id=match.home_team.id,
+                name=match.home_team.name,
+                rank=match.home_team.rank,
+            ),
+            away_team_data=TeamData(
+                id=match.away_team.id,
+                name=match.away_team.name,
+                rank=match.away_team.rank,
+            ),
             league=match.league.name,
             country=match.league.country,
             match_date=(
@@ -493,6 +521,8 @@ class MatchSummary(BaseModel):
             red_cards_home=match.red_cards_home,
             red_cards_away=match.red_cards_away,
             minute=match.minute,
+            season=match.season,
+            round=match.round,
         )
 
 

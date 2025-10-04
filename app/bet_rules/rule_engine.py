@@ -6,13 +6,12 @@ from app.bet_rules.structures import (
     ConsecutiveDrawsRule,
     ConsecutiveLossesRule,
     LiveMatchDrawRedCardRule,
+    MatchSummary,
     Top5ConsecutiveLossesRule,
 )
-from app.db.models import Match
-from app.db.storage import FootballDataStorage
 from app.settings import settings
 
-from .team_analysis import MatchData, TeamAnalysisService, TeamData
+from .team_analysis import TeamAnalysisService
 
 
 logger = structlog.get_logger()
@@ -22,7 +21,6 @@ class BettingRulesEngine:
     """Betting rules engine with configurable rules"""
 
     def __init__(self, rounds_back: int = 5) -> None:
-        self.storage = FootballDataStorage()
         self.top_teams_count = settings.top_teams_count
         self.rounds_back = rounds_back
         self.team_analysis_service = TeamAnalysisService(
@@ -43,65 +41,37 @@ class BettingRulesEngine:
                 return rule
         return None
 
-    def _convert_team_to_pydantic(self, team) -> TeamData:
-        """Convert Peewee Team model to Pydantic TeamData"""
-        return TeamData(id=team.id, name=team.name, rank=team.rank)
-
-    def _convert_match_to_pydantic(self, match) -> MatchData:
-        """Convert Peewee Match model to Pydantic MatchData"""
-        return MatchData(
-            id=match.id,
-            home_team_id=match.home_team.id,
-            away_team_id=match.away_team.id,
-            home_score=match.home_score,
-            away_score=match.away_score,
-            match_date=match.match_date.isoformat() if match.match_date else None,
-            status=match.status,
-        )
-
-    def analyze_match(self, match: Match) -> list[Bet]:
-        """Analyze a single match for betting opportunities using season and round context"""
+    def analyze_match(self, match: MatchSummary) -> list[Bet]:
+        """Analyze a MatchSummary for betting opportunities using season and round context"""
         opportunities: list[Bet] = []
 
         # Validate that match has required fields
-        if not match.season or not match.round:
+        if (
+            not match.season
+            or not match.round
+            or not match.home_team_id
+            or not match.away_team_id
+        ):
             logger.warning(
-                f'Match {match.id} missing season or round information. '
-                f'Season: {match.season}, Round: {match.round}'
+                f'Match {match.match_id} missing required information. '
+                f'Season: {match.season}, Round: {match.round}, '
+                f'Home team ID: {match.home_team_id}, Away team ID: {match.away_team_id}'
             )
             return opportunities
 
-        # Get team matches from the same season and previous rounds
-        home_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
-            match.home_team, match.season, match.round, self.rounds_back
-        )
-        away_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
-            match.away_team, match.season, match.round, self.rounds_back
-        )
-
         logger.debug(
-            f'Analyzing match {match.home_team.name} vs {match.away_team.name} '
+            f'Analyzing match {match.home_team} vs {match.away_team} '
             f'(Season {match.season}, Round {match.round}) - '
-            f'Home team: {len(home_recent_matches)} previous matches, '
-            f'Away team: {len(away_recent_matches)} previous matches'
+            f'Home team: {len(match.home_recent_matches)} previous matches, '
+            f'Away team: {len(match.away_recent_matches)} previous matches'
         )
 
-        # Convert to Pydantic models
-        home_team_data = self._convert_team_to_pydantic(match.home_team)
-        away_team_data = self._convert_team_to_pydantic(match.away_team)
-        home_matches_data = [
-            self._convert_match_to_pydantic(m) for m in home_recent_matches
-        ]
-        away_matches_data = [
-            self._convert_match_to_pydantic(m) for m in away_recent_matches
-        ]
-
-        # Analyze both teams using season-specific data
+        # Analyze both teams using the provided team data and recent matches
         home_analysis = self.team_analysis_service.analyze_team_performance(
-            home_team_data, home_matches_data
+            match.home_team_data, match.home_recent_matches
         )
         away_analysis = self.team_analysis_service.analyze_team_performance(
-            away_team_data, away_matches_data
+            match.away_team_data, match.away_recent_matches
         )
 
         # Evaluate each rule uniformly; rules handle specific logic
