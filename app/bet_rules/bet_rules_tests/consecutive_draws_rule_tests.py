@@ -58,8 +58,8 @@ def test_consecutive_draws_rule_confidence(
     team_analysis = create_team_analysis(consecutive_draws=consecutive_draws)
     opponent_analysis = create_team_analysis(rank=10)
     match_summary = MatchSummary(
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
     )
@@ -91,8 +91,8 @@ def test_consecutive_draws_rule_determine_outcome(
 
     match_result = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
         match_date=None,

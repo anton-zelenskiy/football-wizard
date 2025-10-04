@@ -49,18 +49,18 @@ class BettingRulesEngine:
         if (
             not match.season
             or not match.round
-            or not match.home_team_id
-            or not match.away_team_id
+            or not match.home_team_data
+            or not match.away_team_data
         ):
             logger.warning(
                 f'Match {match.match_id} missing required information. '
                 f'Season: {match.season}, Round: {match.round}, '
-                f'Home team ID: {match.home_team_id}, Away team ID: {match.away_team_id}'
+                f'Home team data: {match.home_team_data is not None}, Away team data: {match.away_team_data is not None}'
             )
             return opportunities
 
         logger.debug(
-            f'Analyzing match {match.home_team} vs {match.away_team} '
+            f'Analyzing match {match.home_team_data.name} vs {match.away_team_data.name} '
             f'(Season {match.season}, Round {match.round}) - '
             f'Home team: {len(match.home_recent_matches)} previous matches, '
             f'Away team: {len(match.away_recent_matches)} previous matches'

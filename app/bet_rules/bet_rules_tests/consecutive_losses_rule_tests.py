@@ -58,8 +58,8 @@ def test_consecutive_losses_rule_confidence(
     team_analysis = create_team_analysis(consecutive_losses=consecutive_losses)
     opponent_analysis = create_team_analysis(rank=10)
     match_summary = MatchSummary(
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
     )
@@ -97,8 +97,8 @@ def test_consecutive_losses_rule_rank_bonus(
     team_analysis = create_team_analysis(consecutive_losses=3, rank=rank)
     opponent_analysis = create_team_analysis(rank=opponent_rank)
     match_summary = MatchSummary(
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
     )
@@ -132,8 +132,8 @@ def test_consecutive_losses_rule_no_goals_bonus(
     )
     opponent_analysis = create_team_analysis(rank=10)
     match_summary = MatchSummary(
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
     )
@@ -165,8 +165,8 @@ def test_consecutive_losses_rule_determine_outcome(
 
     match_result = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=5),
+        away_team_data=TeamData(id=2, name='Away Team', rank=10),
         league='Test League',
         country='Test Country',
         match_date=None,

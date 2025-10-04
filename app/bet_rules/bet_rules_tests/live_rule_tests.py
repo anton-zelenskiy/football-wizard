@@ -43,8 +43,8 @@ def test_live_match_red_card_rule_historical_analysis():
     )
 
     match_summary = MatchSummary(
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
     )
@@ -78,8 +78,8 @@ def test_live_match_red_card_rule_no_red_card():
     # Create match summary with no red cards, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -118,8 +118,8 @@ def test_live_match_red_card_rule_not_draw():
     # Create match summary with red card but not a draw
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -158,8 +158,8 @@ def test_live_match_red_card_rule_home_team_red_card():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -198,8 +198,8 @@ def test_live_match_red_card_rule_away_team_red_card():
     # Create match summary with away team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -238,8 +238,8 @@ def test_live_match_red_card_rule_weaker_team_advantage():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -278,8 +278,8 @@ def test_live_match_red_card_rule_consecutive_no_goals_bonus():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -319,8 +319,8 @@ def test_live_match_red_card_rule_consecutive_draws_bonus():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -360,8 +360,8 @@ def test_live_match_red_card_rule_consecutive_losses_bonus():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -401,8 +401,8 @@ def test_live_match_red_card_rule_multiple_bonuses():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -442,8 +442,8 @@ def test_live_match_red_card_rule_confidence_cap():
     # Create match summary with home team red card, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -483,8 +483,8 @@ def test_live_match_red_card_rule_both_teams_red_cards():
     # Create match summary with both teams having red cards, tied score
     match_summary = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -518,8 +518,8 @@ def test_live_match_red_card_rule_outcome_determination(
 
     match_result = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,
@@ -540,8 +540,8 @@ def test_live_match_red_card_rule_incomplete_match():
 
     match_result = MatchSummary(
         match_id=None,
-        home_team='Home Team',
-        away_team='Away Team',
+        home_team_data=TeamData(id=1, name='Home Team', rank=1),
+        away_team_data=TeamData(id=2, name='Away Team', rank=2),
         league='Test League',
         country='Test Country',
         match_date=None,

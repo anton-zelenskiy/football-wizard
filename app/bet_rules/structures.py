@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -434,14 +434,10 @@ class MatchSummary(BaseModel):
     """Comprehensive match information for betting contexts and outcome determination"""
 
     match_id: int | None = Field(default=None, description='Match ID')
-    home_team: str = Field(description='Home team name')
-    away_team: str = Field(description='Away team name')
-    home_team_id: int | None = Field(default=None, description='Home team ID')
-    away_team_id: int | None = Field(default=None, description='Away team ID')
-    home_team_data: Union['TeamData', None] = Field(
+    home_team_data: 'TeamData' = Field(
         default=None, description='Home team data for analysis'
     )
-    away_team_data: Union['TeamData', None] = Field(
+    away_team_data: 'TeamData' = Field(
         default=None, description='Away team data for analysis'
     )
     league: str = Field(description='League name')
@@ -473,14 +469,14 @@ class MatchSummary(BaseModel):
         if not self.is_complete:
             return None
 
-        if team_name == self.home_team:
+        if team_name == self.home_team_data.name:
             if self.home_score > self.away_score:
                 return MatchResult.WIN
             elif self.home_score < self.away_score:
                 return MatchResult.LOSE
             else:
                 return MatchResult.DRAW
-        elif team_name == self.away_team:
+        elif team_name == self.away_team_data.name:
             if self.away_score > self.home_score:
                 return MatchResult.WIN
             elif self.away_score < self.home_score:
@@ -495,10 +491,6 @@ class MatchSummary(BaseModel):
         """Create MatchSummary from Match database model"""
         return cls(
             match_id=match.id,
-            home_team=match.home_team.name,
-            away_team=match.away_team.name,
-            home_team_id=match.home_team.id,
-            away_team_id=match.away_team.id,
             home_team_data=TeamData(
                 id=match.home_team.id,
                 name=match.home_team.name,
