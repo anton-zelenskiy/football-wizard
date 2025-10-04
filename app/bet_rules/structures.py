@@ -109,16 +109,16 @@ class BettingRule(BaseModel):
             # When both teams fit, pick the one with higher confidence
             if home_confidence >= away_confidence:
                 final_confidence = home_confidence
-                team_analyzed = match.home_team.name
+                team_analyzed = match.home_team_data.name
             else:
                 final_confidence = away_confidence
-                team_analyzed = match.away_team.name
+                team_analyzed = match.away_team_data.name
         elif home_fits:
             final_confidence = home_confidence
-            team_analyzed = match.home_team.name
+            team_analyzed = match.home_team_data.name
         else:
             final_confidence = away_confidence
-            team_analyzed = match.away_team.name
+            team_analyzed = match.away_team_data.name
 
         details: dict[str, Any] = {
             'home_confidence': home_confidence,
@@ -135,7 +135,7 @@ class BettingRule(BaseModel):
         }
 
         return Bet(
-            match=MatchSummary.from_match(match),
+            match=match,
             opportunity=BettingOpportunity(
                 slug=self.slug,
                 confidence=final_confidence,
@@ -568,11 +568,11 @@ class Bet(BaseModel):
 
     @property
     def home_team(self) -> str:
-        return self.match.home_team
+        return self.match.home_team_data.name
 
     @property
     def away_team(self) -> str:
-        return self.match.away_team
+        return self.match.away_team_data.name
 
     @property
     def league(self) -> str:

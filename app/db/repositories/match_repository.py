@@ -3,6 +3,7 @@ from typing import Any
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 import structlog
 
 from app.db.sqlalchemy_models import League, Match, Team
@@ -201,8 +202,6 @@ class MatchRepository(BaseRepository[Match]):
     async def get_matches_by_status(self, status: str) -> list[Match]:
         """Get matches by specific status with relationships loaded"""
         try:
-            from sqlalchemy.orm import selectinload
-
             result = await self.session.execute(
                 select(Match)
                 .options(
@@ -223,8 +222,6 @@ class MatchRepository(BaseRepository[Match]):
     ) -> list[Match]:
         """Get team matches from specific season and rounds for analysis"""
         try:
-            from sqlalchemy.orm import selectinload
-
             # Calculate the range of rounds to include
             start_round = max(1, current_round - rounds_back)
             end_round = current_round - 1  # Exclude current round
@@ -261,5 +258,9 @@ class MatchRepository(BaseRepository[Match]):
             logger.error(
                 'Error getting matches',
                 error=str(e),
+                current_round=current_round,
+                rounds_back=rounds_back,
+                team_id=team_id,
+                season=season,
             )
             return []

@@ -3,6 +3,8 @@ import structlog
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.bet_rules.structures import Bet, MatchSummary
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
+from app.db.repositories.match_repository import MatchRepository
+from app.db.session import get_async_db_session
 from app.db.storage import FootballDataStorage, LeagueData
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
 
@@ -14,52 +16,61 @@ class BettingTasks:
     def __init__(self) -> None:
         self.rules_engine = BettingRulesEngine()
         self.storage = FootballDataStorage()
+        self.match_repo = None  # Will be initialized in each task
 
     async def daily_scheduled_analysis_task(self, ctx) -> None:
         """Daily task to analyze scheduled matches and find betting opportunities"""
         try:
             logger.info('Starting daily scheduled matches analysis')
 
-            # Get scheduled matches and analyze each one
-            scheduled_matches = self.storage.get_scheduled_matches()
-            all_opportunities = []
+            # Initialize repository
+            async with get_async_db_session() as session:
+                self.match_repo = MatchRepository(session)
 
-            for match in scheduled_matches:
-                try:
-                    # Convert Match to MatchSummary and populate recent matches
-                    match_summary = self._create_match_summary_with_recent_matches(
-                        match
-                    )
-                    match_opportunities = self.rules_engine.analyze_match(match_summary)
-                    all_opportunities.extend(match_opportunities)
-
-                except Exception as e:
-                    logger.error(
-                        f'Error analyzing scheduled match {match.home_team.name} vs '
-                        f'{match.away_team.name}',
-                        error=str(e),
-                    )
-
-            if all_opportunities:
-                # Save opportunities to database iteratively (with duplicate prevention)
-                saved_opportunities = await self._save_opportunities_iteratively(
-                    all_opportunities
+                # Get scheduled matches and analyze each one
+                scheduled_matches = await self.match_repo.get_matches_by_status(
+                    'scheduled'
                 )
+                all_opportunities = []
 
-                # Only send notifications for newly created opportunities
-                if saved_opportunities:
-                    await send_daily_summary(saved_opportunities)
-                    logger.info(
-                        f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found and notified'
+                for match in scheduled_matches:
+                    try:
+                        # Convert Match to MatchSummary and populate recent matches
+                        match_summary = (
+                            await self._create_match_summary_with_recent_matches(match)
+                        )
+                        match_opportunities = self.rules_engine.analyze_match(
+                            match_summary
+                        )
+                        all_opportunities.extend(match_opportunities)
+
+                    except Exception as e:
+                        logger.error(
+                            f'Error analyzing scheduled match {match.home_team.name} vs '
+                            f'{match.away_team.name}',
+                            error=str(e),
+                        )
+
+                if all_opportunities:
+                    # Save opportunities to database iteratively (with duplicate prevention)
+                    saved_opportunities = await self._save_opportunities_iteratively(
+                        all_opportunities
                     )
+
+                    # Only send notifications for newly created opportunities
+                    if saved_opportunities:
+                        await send_daily_summary(saved_opportunities)
+                        logger.info(
+                            f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found and notified'
+                        )
+                    else:
+                        logger.info(
+                            'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
+                        )
                 else:
                     logger.info(
-                        'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
+                        'Daily scheduled analysis completed: no opportunities found'
                     )
-            else:
-                logger.info(
-                    'Daily scheduled analysis completed: no opportunities found'
-                )
 
         except Exception as e:
             logger.error('Error in daily scheduled analysis task', error=str(e))
@@ -85,42 +96,48 @@ class BettingTasks:
             )
             logger.info(f'Saved {saved_count} live matches')
 
-            # Get live matches and analyze each one
-            live_matches = self.storage.get_live_matches()
-            all_opportunities = []
+            # Initialize repository and get live matches
+            async with get_async_db_session() as session:
+                self.match_repo = MatchRepository(session)
 
-            for match in live_matches:
-                try:
-                    # Convert Match to MatchSummary and populate recent matches
-                    match_summary = self._create_match_summary_with_recent_matches(
-                        match
+                # Get live matches and analyze each one
+                live_matches = await self.match_repo.get_matches_by_status('live')
+                all_opportunities = []
+
+                for match in live_matches:
+                    try:
+                        # Convert Match to MatchSummary and populate recent matches
+                        match_summary = (
+                            await self._create_match_summary_with_recent_matches(match)
+                        )
+                        match_opportunities = self.rules_engine.analyze_match(
+                            match_summary
+                        )
+                        all_opportunities.extend(match_opportunities)
+
+                    except Exception as e:
+                        logger.error(
+                            f'Error analyzing live match {match.home_team.name} vs {match.away_team.name}',
+                            error=str(e),
+                        )
+
+                if all_opportunities:
+                    # Save opportunities to database iteratively
+                    saved_opportunities = await self._save_opportunities_iteratively(
+                        all_opportunities
                     )
-                    match_opportunities = self.rules_engine.analyze_match(match_summary)
-                    all_opportunities.extend(match_opportunities)
 
-                except Exception as e:
-                    logger.error(
-                        f'Error analyzing live match {match.home_team.name} vs {match.away_team.name}',
-                        error=str(e),
+                    # Send immediate notifications for live opportunities
+                    for opp in saved_opportunities:
+                        await send_betting_opportunity(opp)
+
+                    logger.info(
+                        f'Live analysis completed: {len(all_opportunities)} opportunities found'
                     )
-
-            if all_opportunities:
-                # Save opportunities to database iteratively
-                saved_opportunities = await self._save_opportunities_iteratively(
-                    all_opportunities
-                )
-
-                # Send immediate notifications for live opportunities
-                for opp in saved_opportunities:
-                    await send_betting_opportunity(opp)
-
-                logger.info(
-                    f'Live analysis completed: {len(all_opportunities)} opportunities found'
-                )
-                return f'Live analysis completed: {len(all_opportunities)} opportunities found'
-            else:
-                logger.info('Live analysis completed: no opportunities found')
-                return 'Live analysis completed: no opportunities found'
+                    return f'Live analysis completed: {len(all_opportunities)} opportunities found'
+                else:
+                    logger.info('Live analysis completed: no opportunities found')
+                    return 'Live analysis completed: no opportunities found'
 
         except Exception as e:
             logger.error('Error in live matches analysis task', error=str(e))
@@ -284,14 +301,24 @@ class BettingTasks:
 
         return saved_count
 
-    def _create_match_summary_with_recent_matches(self, match) -> MatchSummary:
+    async def _create_match_summary_with_recent_matches(self, match) -> MatchSummary:
         """Create MatchSummary with populated recent matches for both teams"""
-        # Get recent matches for both teams
-        home_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
-            match.home_team.id, match.season, match.round, self.rules_engine.rounds_back
+        # Get recent matches for both teams using repository
+        home_recent_matches = (
+            await self.match_repo.get_team_matches_by_season_and_rounds(
+                match.home_team.id,
+                match.season,
+                match.round,
+                self.rules_engine.rounds_back,
+            )
         )
-        away_recent_matches = self.storage.get_team_matches_by_season_and_rounds(
-            match.away_team.id, match.season, match.round, self.rules_engine.rounds_back
+        away_recent_matches = (
+            await self.match_repo.get_team_matches_by_season_and_rounds(
+                match.away_team.id,
+                match.season,
+                match.round,
+                self.rules_engine.rounds_back,
+            )
         )
 
         # Convert to Pydantic models

@@ -110,6 +110,20 @@ class Match(Base):
     def __repr__(self):
         return f"<Match(id={self.id}, home_team_id={self.home_team_id}, away_team_id={self.away_team_id}, status='{self.status}')>"
 
+    def to_pydantic(self):
+        """Convert SQLAlchemy Match model to Pydantic MatchData"""
+        from app.bet_rules.team_analysis import MatchData
+
+        return MatchData(
+            id=self.id,
+            home_team_id=self.home_team_id,
+            away_team_id=self.away_team_id,
+            home_score=self.home_score,
+            away_score=self.away_score,
+            match_date=self.match_date.isoformat() if self.match_date else None,
+            status=self.status,
+        )
+
 
 class BettingOpportunity(Base):
     """SQLAlchemy BettingOpportunity model"""
