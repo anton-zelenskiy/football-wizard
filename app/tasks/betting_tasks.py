@@ -15,7 +15,7 @@ class BettingTasks:
         self.rules_engine = BettingRulesEngine()
         self.storage = FootballDataStorage()
 
-    async def daily_scheduled_analysis_task(self, ctx) -> str:
+    async def daily_scheduled_analysis_task(self, ctx) -> None:
         """Daily task to analyze scheduled matches and find betting opportunities"""
         try:
             logger.info('Starting daily scheduled matches analysis')
@@ -49,17 +49,14 @@ class BettingTasks:
                     logger.info(
                         f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found and notified'
                     )
-                    return f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found'
                 else:
                     logger.info(
                         'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
                     )
-                    return 'Daily scheduled analysis completed: no new opportunities (duplicates filtered)'
             else:
                 logger.info(
                     'Daily scheduled analysis completed: no opportunities found'
                 )
-                return 'Daily scheduled analysis completed: no opportunities found'
 
         except Exception as e:
             logger.error('Error in daily scheduled analysis task', error=str(e))
@@ -75,11 +72,15 @@ class BettingTasks:
                 live_matches_data: list[
                     CommonMatchData
                 ] = await scraper.scrape_live_matches()
-                if live_matches_data:
-                    saved_count = await self._save_matches_iteratively(
-                        live_matches_data, 'live'
-                    )
-                    logger.info(f'Saved {saved_count} live matches')
+
+            if not live_matches_data:
+                logger.info('No live matches found')
+                return 'No live matches found'
+
+            saved_count = await self._save_matches_iteratively(
+                live_matches_data, 'live'
+            )
+            logger.info(f'Saved {saved_count} live matches')
 
             # Get live matches and analyze each one
             live_matches = self.storage.get_live_matches()
