@@ -8,7 +8,6 @@ class TeamAnalysis(BaseModel):
 
     # Core team info
     team: Team
-    team_type: str = Field(description='Type of team (home/away)')
     rank: int | None = Field(default=None, description='Team rank in league')
 
     # Consecutive streaks
@@ -98,14 +97,13 @@ class TeamAnalysisService:
         self.min_consecutive_losses = min_consecutive_losses
 
     def analyze_team_performance(
-        self, team: Team, team_type: str, recent_matches: list[Match]
+        self, team: Team, recent_matches: list[Match]
     ) -> TeamAnalysis:
         """Analyze a team's recent performance comprehensively"""
 
         # Create base analysis
         analysis = TeamAnalysis(
             team=team,
-            team_type=team_type,
             rank=team.rank,
             recent_matches=recent_matches,
             total_matches=len(recent_matches),

@@ -25,7 +25,6 @@ def create_team_analysis(
 
     analysis = TeamAnalysis(
         team=team,
-        team_type='home',
         rank=rank,
         consecutive_losses=consecutive_losses,
         consecutive_draws=consecutive_draws,

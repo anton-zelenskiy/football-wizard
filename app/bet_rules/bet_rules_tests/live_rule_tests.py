@@ -30,7 +30,6 @@ def test_live_match_red_card_rule_historical_analysis():
     # Create team analysis
     team_analysis = TeamAnalysis(
         team=Team(name='Test Team', rank=1),
-        team_type='home',
         consecutive_losses=3,
         consecutive_draws=2,
         consecutive_no_goals=1,
@@ -38,7 +37,6 @@ def test_live_match_red_card_rule_historical_analysis():
 
     opponent_analysis = TeamAnalysis(
         team=Team(name='Opponent Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -65,7 +63,6 @@ def test_live_match_red_card_rule_no_red_card():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -73,7 +70,6 @@ def test_live_match_red_card_rule_no_red_card():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -107,7 +103,6 @@ def test_live_match_red_card_rule_not_draw():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -115,7 +110,6 @@ def test_live_match_red_card_rule_not_draw():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -149,7 +143,6 @@ def test_live_match_red_card_rule_home_team_red_card():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -157,7 +150,6 @@ def test_live_match_red_card_rule_home_team_red_card():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -191,7 +183,6 @@ def test_live_match_red_card_rule_away_team_red_card():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -199,7 +190,6 @@ def test_live_match_red_card_rule_away_team_red_card():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -233,7 +223,6 @@ def test_live_match_red_card_rule_weaker_team_advantage():
     # Create team analyses - away team is weaker (higher rank)
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -241,7 +230,6 @@ def test_live_match_red_card_rule_weaker_team_advantage():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=5),  # Weaker team
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -275,7 +263,6 @@ def test_live_match_red_card_rule_consecutive_no_goals_bonus():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -283,7 +270,6 @@ def test_live_match_red_card_rule_consecutive_no_goals_bonus():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=3,  # 3 consecutive no goals
@@ -318,7 +304,6 @@ def test_live_match_red_card_rule_consecutive_draws_bonus():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -326,7 +311,6 @@ def test_live_match_red_card_rule_consecutive_draws_bonus():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=3,  # 3 consecutive draws
         consecutive_no_goals=0,
@@ -361,7 +345,6 @@ def test_live_match_red_card_rule_consecutive_losses_bonus():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -369,7 +352,6 @@ def test_live_match_red_card_rule_consecutive_losses_bonus():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=3,  # 3 consecutive losses
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -404,7 +386,6 @@ def test_live_match_red_card_rule_multiple_bonuses():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -412,7 +393,6 @@ def test_live_match_red_card_rule_multiple_bonuses():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=5),  # Weaker team
-        team_type='away',
         consecutive_losses=2,  # 2 consecutive losses
         consecutive_draws=2,  # 2 consecutive draws
         consecutive_no_goals=2,  # 2 consecutive no goals
@@ -447,7 +427,6 @@ def test_live_match_red_card_rule_confidence_cap():
     # Create team analyses with high bonuses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -455,7 +434,6 @@ def test_live_match_red_card_rule_confidence_cap():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=10),  # Much weaker team
-        team_type='away',
         consecutive_losses=5,  # 5 consecutive losses
         consecutive_draws=5,  # 5 consecutive draws
         consecutive_no_goals=5,  # 5 consecutive no goals
@@ -490,7 +468,6 @@ def test_live_match_red_card_rule_both_teams_red_cards():
     # Create team analyses
     home_analysis = TeamAnalysis(
         team=Team(name='Home Team', rank=1),
-        team_type='home',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,
@@ -498,7 +475,6 @@ def test_live_match_red_card_rule_both_teams_red_cards():
 
     away_analysis = TeamAnalysis(
         team=Team(name='Away Team', rank=2),
-        team_type='away',
         consecutive_losses=0,
         consecutive_draws=0,
         consecutive_no_goals=0,

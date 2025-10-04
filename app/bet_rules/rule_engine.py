@@ -72,10 +72,10 @@ class BettingRulesEngine:
 
         # Analyze both teams using season-specific data
         home_analysis = self.team_analysis_service.analyze_team_performance(
-            match.home_team, 'home', home_recent_matches
+            match.home_team, home_recent_matches
         )
         away_analysis = self.team_analysis_service.analyze_team_performance(
-            match.away_team, 'away', away_recent_matches
+            match.away_team, away_recent_matches
         )
 
         # Evaluate each rule uniformly; rules handle specific logic
