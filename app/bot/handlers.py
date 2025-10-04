@@ -13,6 +13,8 @@ from app.bot.notifications import (
     format_completed_opportunities_message,
     format_opportunities_message,
 )
+from app.db.repositories.telegram_user_repository import TelegramUserRepository
+from app.db.session import get_async_db_session
 from app.db.storage import FootballDataStorage
 from app.settings import settings
 
@@ -30,14 +32,18 @@ async def start_command(message: Message) -> None:
     first_name = message.from_user.first_name
     last_name = message.from_user.last_name
 
-    # Get or create user using storage
-    storage = FootballDataStorage()
-    user, created = storage.get_or_create_telegram_user(
-        telegram_id=user_id,
-        username=username,
-        first_name=first_name,
-        last_name=last_name,
-    )
+    # Get or create user using new repository
+    session = get_async_db_session()
+    try:
+        repo = TelegramUserRepository(session)
+        user, created = await repo.get_or_create(
+            telegram_id=user_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+        )
+    finally:
+        await session.close()
 
     welcome_text = (
         f'🎯 Welcome to Football Betting Analysis Bot!\n\n'
@@ -134,8 +140,14 @@ async def status_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        user = storage.get_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.get_by_telegram_id(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
         status_text = (
             f'📊 Your Subscription Status\n\n'
@@ -195,8 +207,12 @@ async def subscribe_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.subscribe_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.subscribe_user(user_id)
+        finally:
+            await session.close()
 
         await message.answer(
             '✅ Successfully subscribed to all notifications!\n\n'
@@ -220,8 +236,12 @@ async def unsubscribe_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.unsubscribe_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.unsubscribe_user(user_id)
+        finally:
+            await session.close()
 
         await message.answer(
             '🔕 Successfully unsubscribed from all notifications.\n\n'
@@ -241,10 +261,14 @@ async def daily_on_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.update_telegram_user_notifications(
-            telegram_id=user_id, daily_notifications=True
-        )
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.update_notifications(
+                telegram_id=user_id, daily_notifications=True
+            )
+        finally:
+            await session.close()
 
         await message.answer(
             '✅ Daily notifications enabled!\n\n'
@@ -264,10 +288,14 @@ async def daily_off_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.update_telegram_user_notifications(
-            telegram_id=user_id, daily_notifications=False
-        )
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.update_notifications(
+                telegram_id=user_id, daily_notifications=False
+            )
+        finally:
+            await session.close()
 
         await message.answer(
             '🔕 Daily notifications disabled.\n\n'
@@ -287,10 +315,14 @@ async def live_on_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.update_telegram_user_notifications(
-            telegram_id=user_id, live_notifications=True
-        )
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.update_notifications(
+                telegram_id=user_id, live_notifications=True
+            )
+        finally:
+            await session.close()
 
         await message.answer(
             '✅ Live notifications enabled!\n\n'
@@ -310,10 +342,14 @@ async def live_off_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.update_telegram_user_notifications(
-            telegram_id=user_id, live_notifications=False
-        )
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.update_notifications(
+                telegram_id=user_id, live_notifications=False
+            )
+        finally:
+            await session.close()
 
         await message.answer(
             '🔕 Live notifications disabled.\n\n'
@@ -334,10 +370,17 @@ async def opportunities_command(message: Message) -> None:
 
     try:
         # Check if user is registered
-        storage = FootballDataStorage()
-        storage.get_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.get_by_telegram_id(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
-        # Get all active betting opportunities
+        # Get all active betting opportunities (still using storage for now)
+        storage = FootballDataStorage()
         opportunities = storage.get_active_betting_opportunities()
 
         # Format and send the message
@@ -368,10 +411,17 @@ async def completed_command(message: Message) -> None:
 
     try:
         # Check if user is registered
-        storage = FootballDataStorage()
-        storage.get_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.get_by_telegram_id(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
-        # Get completed betting opportunities and statistics
+        # Get completed betting opportunities and statistics (still using storage for now)
+        storage = FootballDataStorage()
         opportunities = storage.get_completed_betting_opportunities(limit=20)
         statistics = storage.get_betting_statistics()
 
@@ -422,8 +472,12 @@ async def handle_subscribe_callback(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.subscribe_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.subscribe_user(user_id)
+        finally:
+            await session.close()
 
         await callback.message.edit_text(
             '✅ Successfully subscribed to all notifications!'
@@ -443,8 +497,12 @@ async def handle_unsubscribe_callback(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        storage.unsubscribe_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            await repo.unsubscribe_user(user_id)
+        finally:
+            await session.close()
 
         await callback.message.edit_text(
             '🔕 Successfully unsubscribed from all notifications.'
@@ -464,8 +522,14 @@ async def handle_toggle_daily(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        user = storage.toggle_telegram_user_daily_notifications(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.toggle_daily_notifications(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
         status = 'enabled' if user.daily_notifications else 'disabled'
         await callback.message.edit_text(f'✅ Daily notifications {status}!')
@@ -486,8 +550,14 @@ async def handle_toggle_live(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        storage = FootballDataStorage()
-        user = storage.toggle_telegram_user_live_notifications(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.toggle_live_notifications(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
         status = 'enabled' if user.live_notifications else 'disabled'
         await callback.message.edit_text(f'✅ Live notifications {status}!')
@@ -504,8 +574,14 @@ async def handle_toggle_live(callback: CallbackQuery) -> None:
 async def _show_settings(user_id: int, chat_id: int) -> None:
     """Show settings menu"""
     try:
-        storage = FootballDataStorage()
-        user = storage.get_telegram_user(user_id)
+        session = get_async_db_session()
+        try:
+            repo = TelegramUserRepository(session)
+            user = await repo.get_by_telegram_id(user_id)
+            if not user:
+                raise Exception('User not found')
+        finally:
+            await session.close()
 
         settings_text = (
             f'⚙️ Notification Settings\n\n'
