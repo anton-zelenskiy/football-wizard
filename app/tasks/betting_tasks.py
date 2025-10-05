@@ -259,8 +259,11 @@ class BettingTasks:
         try:
             matches = await scraper.scrape_league_matches(country, league_name)
             if matches:
-                for match in matches:
-                    self.storage.save_match(match)
+                # Initialize repository for saving matches
+                async with get_async_db_session() as session:
+                    match_repo = MatchRepository(session)
+                    for match in matches:
+                        await match_repo.save_match(match)
                 stats['matches_count'] = len(matches)
                 logger.debug(
                     f'Saved {len(matches)} matches for {country} - {league_name}'
@@ -272,8 +275,11 @@ class BettingTasks:
         try:
             fixtures = await scraper.scrape_league_fixtures(country, league_name)
             if fixtures:
-                for fixture in fixtures:
-                    self.storage.save_match(fixture)
+                # Initialize repository for saving fixtures
+                async with get_async_db_session() as session:
+                    match_repo = MatchRepository(session)
+                    for fixture in fixtures:
+                        await match_repo.save_match(fixture)
                 stats['fixtures_count'] = len(fixtures)
                 logger.debug(
                     f'Saved {len(fixtures)} fixtures for {country} - {league_name}'
@@ -289,15 +295,19 @@ class BettingTasks:
         """Save matches iteratively with error handling"""
         saved_count = 0
 
-        for match in matches:
-            try:
-                self.storage.save_match(match)
-                saved_count += 1
-            except Exception as e:
-                logger.error(
-                    f'Error saving {match_type} match {match.home_team} vs {match.away_team}: {e}'
-                )
-                continue
+        # Initialize repository for saving matches
+        async with get_async_db_session() as session:
+            match_repo = MatchRepository(session)
+
+            for match in matches:
+                try:
+                    await match_repo.save_match(match)
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(
+                        f'Error saving {match_type} match {match.home_team} vs {match.away_team}: {e}'
+                    )
+                    continue
 
         return saved_count
 

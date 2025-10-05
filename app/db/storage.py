@@ -12,7 +12,6 @@ from app.db.models import (
     Team,
     db,
 )
-from app.scraper.livesport_scraper import CommonMatchData
 
 
 logger = structlog.get_logger()
@@ -50,109 +49,6 @@ class FootballDataStorage:
             )
             if created:
                 logger.info(f'Created new league: {league.name}')
-
-    def update_match_status(self, match: Match, new_status: str, **kwargs: Any) -> None:
-        """Update match status and related fields, handling lifecycle transitions"""
-        old_status = match.status
-        match.status = new_status
-        match.updated_at = datetime.now()
-
-        # Handle status-specific field updates
-        if new_status == 'live':
-            # Set live-specific fields
-            match.minute = kwargs.get('minute')
-            match.red_cards_home = kwargs.get('red_cards_home', 0)
-            match.red_cards_away = kwargs.get('red_cards_away', 0)
-            if 'home_score' in kwargs:
-                match.home_score = kwargs['home_score']
-            if 'away_score' in kwargs:
-                match.away_score = kwargs['away_score']
-
-        elif new_status == 'finished':
-            # Clear live-specific fields when match finishes (set to defaults)
-            match.minute = None
-            match.red_cards_home = 0  # Set to default value, not None
-            match.red_cards_away = 0  # Set to default value, not None
-            # Ensure final scores are set
-            if 'home_score' in kwargs:
-                match.home_score = kwargs['home_score']
-            if 'away_score' in kwargs:
-                match.away_score = kwargs['away_score']
-
-        elif new_status == 'scheduled':
-            # Clear live/finished specific fields (set to defaults)
-            match.minute = None
-            match.red_cards_home = 0  # Set to default value, not None
-            match.red_cards_away = 0  # Set to default value, not None
-            match.home_score = None
-            match.away_score = None
-
-        match.save()
-        logger.info(
-            f'Updated match status: {match.home_team.name} vs {match.away_team.name} '
-            f'{old_status} -> {new_status}'
-        )
-
-    def save_match(self, match_data: 'CommonMatchData') -> None:
-        """Unified method to save any type of match (live, finished, scheduled)"""
-        with self.db.atomic():
-            # Normalize country name to prevent duplicates
-            normalized_country = normalize_country_name(match_data.country)
-
-            # Find or create league
-            league, _ = League.get_or_create(
-                name=match_data.league,
-                country=normalized_country,
-                defaults={'country': normalized_country},
-            )
-
-            # Find or create teams
-            home_team, _ = Team.get_or_create(name=match_data.home_team, league=league)
-            away_team, _ = Team.get_or_create(name=match_data.away_team, league=league)
-
-            # Use season from match data (parsed from page)
-            season = match_data.season
-            round_number = match_data.round_number
-
-            # Check if match already exists using core identifying fields
-            try:
-                existing_match = Match.get(
-                    Match.league == league,
-                    Match.home_team == home_team,
-                    Match.away_team == away_team,
-                    Match.season == season,
-                )
-
-                # Update existing match
-                self.update_match_status(
-                    existing_match,
-                    match_data.status,
-                    home_score=match_data.home_score,
-                    away_score=match_data.away_score,
-                    minute=match_data.minute,
-                    red_cards_home=match_data.red_cards_home,
-                    red_cards_away=match_data.red_cards_away,
-                )
-
-            except Match.DoesNotExist:
-                # Create new match
-                Match.create(
-                    league=league,
-                    home_team=home_team,
-                    away_team=away_team,
-                    home_score=match_data.home_score,
-                    away_score=match_data.away_score,
-                    match_date=match_data.match_date or datetime.now(),
-                    season=season,
-                    round=round_number,
-                    status=match_data.status,
-                    minute=match_data.minute,
-                    red_cards_home=match_data.red_cards_home,
-                    red_cards_away=match_data.red_cards_away,
-                )
-                logger.info(
-                    f'Created new match: {home_team.name} vs {away_team.name} ({match_data.status})'
-                )
 
     def save_team_standings(
         self, team_data: dict[str, Any], league_name: str, country: str
@@ -302,10 +198,20 @@ class FootballDataStorage:
         details = opportunity.get_details()
         team_analyzed = details.get('team_analyzed', '')
 
+        from app.bet_rules.team_analysis import TeamData
+
         match_result = MatchSummary(
             match_id=match.id,
-            home_team=match.home_team.name,
-            away_team=match.away_team.name,
+            home_team_data=TeamData(
+                id=match.home_team.id,
+                name=match.home_team.name,
+                rank=match.home_team.rank,
+            ),
+            away_team_data=TeamData(
+                id=match.away_team.id,
+                name=match.away_team.name,
+                rank=match.away_team.rank,
+            ),
             league=match.league.name,
             country=match.league.country,
             match_date=(
