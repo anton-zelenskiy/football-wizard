@@ -219,8 +219,11 @@ class BettingTasks:
                         logger.error(f'Error processing {country}: {league_name}: {e}')
                         continue
 
-            # Update betting outcomes for finished matches
-            self.storage.update_betting_outcomes()
+            # Update betting outcomes for finished matches using repository
+            async with get_async_db_session() as session:
+                opp_repo = BettingOpportunityRepository(session)
+                updated_count = await opp_repo.update_betting_outcomes()
+                logger.info(f'Updated {updated_count} betting outcomes')
 
             logger.info('League data refresh completed successfully')
             return (
