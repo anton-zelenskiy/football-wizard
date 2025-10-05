@@ -3,6 +3,9 @@ import structlog
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.bet_rules.structures import Bet, MatchSummary
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
+from app.db.repositories.betting_opportunity_repository import (
+    BettingOpportunityRepository,
+)
 from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.match_repository import MatchRepository
 from app.db.repositories.team_repository import TeamRepository
@@ -153,25 +156,20 @@ class BettingTasks:
         new_opportunities = 0
         duplicate_opportunities = 0
 
-        for opp in opportunities:
-            try:
-                existing_opportunity = self.storage._find_existing_opportunity(opp)
+        # Initialize repository for saving opportunities
+        async with get_async_db_session() as session:
+            opp_repo = BettingOpportunityRepository(session)
 
-                if existing_opportunity:
-                    duplicate_opportunities += 1
-                    logger.debug(
-                        f'Duplicate opportunity skipped for match {opp.match_id}'
-                    )
+            for opp in opportunities:
+                try:
+                    # Save new opportunity using repository (includes duplicate prevention)
+                    await opp_repo.save_opportunity(opp)
+                    saved_opportunities.append(opp)
+                    new_opportunities += 1
+
+                except Exception as e:
+                    logger.error(f'Error saving opportunity {opp.rule_name}: {e}')
                     continue
-
-                # Save new opportunity
-                self.storage.save_opportunity(opp)
-                saved_opportunities.append(opp)
-                new_opportunities += 1
-
-            except Exception as e:
-                logger.error(f'Error saving opportunity {opp.rule_name}: {e}')
-                continue
 
         logger.info(
             f'Saved {new_opportunities} new opportunities, skipped {duplicate_opportunities} duplicates'

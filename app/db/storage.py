@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 import structlog
 
-from app.bet_rules.structures import Bet, BetOutcome, MatchSummary
+from app.bet_rules.structures import BetOutcome, MatchSummary
 from app.db.models import (
     BettingOpportunity,
     Match,
@@ -60,67 +60,6 @@ class FootballDataStorage:
                 )
 
         logger.info(f'Updated {updated_count} betting outcomes')
-
-    def save_opportunity(self, opportunity: 'Bet') -> BettingOpportunity:
-        """Save betting opportunity to database with duplicate prevention"""
-        match = None
-        if opportunity.match_id:
-            try:
-                match = Match.get(Match.id == opportunity.match_id)
-            except Match.DoesNotExist:
-                logger.warning(
-                    f'Match {opportunity.match_id} not found for betting opportunity'
-                )
-
-        # Add slug to details for outcome determination
-        details = opportunity.details.copy()
-        details['team_analyzed'] = opportunity.team_analyzed
-
-        # Check for existing opportunity to prevent duplicates
-        existing_opportunity = self._find_existing_opportunity(opportunity)
-
-        if existing_opportunity:
-            logger.debug(f'Opportunity already exists for match {opportunity.match_id}')
-            return existing_opportunity
-
-        # Create new opportunity
-        db_opportunity = BettingOpportunity(
-            match=match,
-            rule_slug=opportunity.slug,
-            confidence_score=opportunity.confidence,
-        )
-        db_opportunity.set_details(details)
-        db_opportunity.save()
-
-        logger.info(
-            f'Created new betting opportunity: {opportunity.rule_name} '
-            f'for match {match.id if match else "N/A"}'
-        )
-        return db_opportunity
-
-    def _find_existing_opportunity(
-        self, opportunity: 'Bet'
-    ) -> BettingOpportunity | None:
-        """Find existing betting opportunity by match_id, rule"""
-        try:
-            if not opportunity.match_id:
-                return None
-
-            existing = (
-                BettingOpportunity.select()
-                .where(
-                    BettingOpportunity.match == opportunity.match_id,
-                    BettingOpportunity.rule_slug == opportunity.slug,
-                    BettingOpportunity.outcome.is_null(),
-                )
-                .first()
-            )
-
-            return existing
-
-        except Exception as e:
-            logger.error(f'Error checking for existing opportunity: {e}')
-            return None
 
     def _determine_betting_outcome(
         self, opportunity: BettingOpportunity, match: Match

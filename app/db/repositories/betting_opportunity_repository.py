@@ -1,13 +1,12 @@
 from datetime import datetime
 import json
-from typing import Any
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 import structlog
 
-from app.bet_rules.structures import BetOutcome, MatchSummary
+from app.bet_rules.structures import Bet, BetOutcome, MatchSummary
 from app.bet_rules.team_analysis import TeamData
 from app.db.sqlalchemy_models import BettingOpportunity, Match
 
@@ -39,41 +38,53 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
         )
         return result.scalar_one_or_none()
 
-    async def save_opportunity(
-        self,
-        *,
-        match_id: int | None,
-        rule_slug: str,
-        confidence_score: float,
-        details: dict[str, Any],
-        team_analyzed: str | None = None,
-    ) -> BettingOpportunity:
+    async def _find_existing_opportunity_by_bet(
+        self, opportunity: Bet
+    ) -> BettingOpportunity | None:
+        """Find existing betting opportunity by match_id and rule_slug from Bet object"""
+        if not opportunity.match_id:
+            return None
+        result = await self.session.execute(
+            select(BettingOpportunity).where(
+                and_(
+                    BettingOpportunity.match_id == opportunity.match_id,
+                    BettingOpportunity.rule_slug == opportunity.slug,
+                    BettingOpportunity.outcome.is_(None),
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save_opportunity(self, opportunity: Bet) -> BettingOpportunity:
         """Save betting opportunity to database with duplicate prevention."""
-        # Add team_analyzed to details (used in outcome determination)
-        payload = dict(details or {})
-        if team_analyzed:
-            payload['team_analyzed'] = team_analyzed
+        # Add team_analyzed to details for outcome determination
+        details = opportunity.details.copy()
+        details['team_analyzed'] = opportunity.team_analyzed
 
         # Prevent duplicates for pending opportunities
-        existing = await self._find_existing_opportunity(match_id, rule_slug)
+        existing = await self._find_existing_opportunity_by_bet(opportunity)
         if existing:
             logger.debug(
-                'Opportunity already exists', match_id=match_id, rule=rule_slug
+                'Opportunity already exists',
+                match_id=opportunity.match_id,
+                rule=opportunity.slug,
             )
             return existing
 
         record = BettingOpportunity(
-            match_id=match_id,
-            rule_slug=rule_slug,
-            confidence_score=confidence_score,
-            details=json.dumps(payload),
+            match_id=opportunity.match_id,
+            rule_slug=opportunity.slug,
+            confidence_score=opportunity.confidence,
+            details=json.dumps(details),
             outcome=None,
             created_at=datetime.now(),
         )
         self.session.add(record)
         await self.session.commit()
         await self.session.refresh(record)
-        logger.info('Created new betting opportunity', id=record.id, rule=rule_slug)
+        logger.info(
+            'Created new betting opportunity', id=record.id, rule=opportunity.slug
+        )
         return record
 
     async def get_active_betting_opportunities(self) -> list[BettingOpportunity]:
