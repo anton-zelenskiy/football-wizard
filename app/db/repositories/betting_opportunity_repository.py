@@ -1,0 +1,213 @@
+from datetime import datetime
+import json
+from typing import Any
+
+from sqlalchemy import and_, case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+import structlog
+
+from app.bet_rules.structures import BetOutcome, MatchSummary
+from app.bet_rules.team_analysis import TeamData
+from app.db.sqlalchemy_models import BettingOpportunity, Match
+
+from .base_repository import BaseRepository
+
+
+logger = structlog.get_logger()
+
+
+class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
+    """Repository for BettingOpportunity operations using async SQLAlchemy."""
+
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, BettingOpportunity)
+
+    async def _find_existing_opportunity(
+        self, match_id: int | None, rule_slug: str
+    ) -> BettingOpportunity | None:
+        if not match_id:
+            return None
+        result = await self.session.execute(
+            select(BettingOpportunity).where(
+                and_(
+                    BettingOpportunity.match_id == match_id,
+                    BettingOpportunity.rule_slug == rule_slug,
+                    BettingOpportunity.outcome.is_(None),
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save_opportunity(
+        self,
+        *,
+        match_id: int | None,
+        rule_slug: str,
+        confidence_score: float,
+        details: dict[str, Any],
+        team_analyzed: str | None = None,
+    ) -> BettingOpportunity:
+        """Save betting opportunity to database with duplicate prevention."""
+        # Add team_analyzed to details (used in outcome determination)
+        payload = dict(details or {})
+        if team_analyzed:
+            payload['team_analyzed'] = team_analyzed
+
+        # Prevent duplicates for pending opportunities
+        existing = await self._find_existing_opportunity(match_id, rule_slug)
+        if existing:
+            logger.debug(
+                'Opportunity already exists', match_id=match_id, rule=rule_slug
+            )
+            return existing
+
+        record = BettingOpportunity(
+            match_id=match_id,
+            rule_slug=rule_slug,
+            confidence_score=confidence_score,
+            details=json.dumps(payload),
+            outcome=None,
+            created_at=datetime.now(),
+        )
+        self.session.add(record)
+        await self.session.commit()
+        await self.session.refresh(record)
+        logger.info('Created new betting opportunity', id=record.id, rule=rule_slug)
+        return record
+
+    async def get_active_betting_opportunities(self) -> list[BettingOpportunity]:
+        """Get active (pending) opportunities for future matches."""
+        now = datetime.now()
+        result = await self.session.execute(
+            select(BettingOpportunity)
+            .options(selectinload(BettingOpportunity.match))
+            .join(Match, BettingOpportunity.match_id == Match.id)
+            .where(and_(BettingOpportunity.outcome.is_(None), Match.match_date > now))
+            .order_by(BettingOpportunity.confidence_score.desc())
+        )
+        return result.scalars().all()
+
+    async def get_completed_betting_opportunities(
+        self, limit: int = 50
+    ) -> list[BettingOpportunity]:
+        """Get completed opportunities (have an outcome) for past matches."""
+        now = datetime.now()
+        result = await self.session.execute(
+            select(BettingOpportunity)
+            .options(selectinload(BettingOpportunity.match))
+            .join(Match, BettingOpportunity.match_id == Match.id)
+            .where(
+                and_(BettingOpportunity.outcome.is_not(None), Match.match_date <= now)
+            )
+            .order_by(Match.match_date.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def get_betting_statistics(self) -> dict[str, int | float]:
+        """Return counts for total, wins, losses, and win_rate (%)."""
+        result = await self.session.execute(
+            select(
+                func.count(BettingOpportunity.id),
+                func.sum(
+                    case(
+                        (BettingOpportunity.outcome == BetOutcome.WIN.value, 1), else_=0
+                    )
+                ),
+                func.sum(
+                    case(
+                        (BettingOpportunity.outcome == BetOutcome.LOSE.value, 1),
+                        else_=0,
+                    )
+                ),
+            ).where(BettingOpportunity.outcome.is_not(None))
+        )
+        total, wins, losses = result.one()
+        total = int(total or 0)
+        wins = int(wins or 0)
+        losses = int(losses or 0)
+        win_rate = round((wins / total * 100) if total > 0 else 0.0, 1)
+        return {'total': total, 'wins': wins, 'losses': losses, 'win_rate': win_rate}
+
+    async def _determine_betting_outcome(
+        self, opportunity: BettingOpportunity, match: Match
+    ) -> BetOutcome | None:
+        """Determine outcome using rules engine for finished matches only."""
+        from app.bet_rules.rule_engine import BettingRulesEngine
+
+        # Only evaluate completed matches
+        if (
+            match.status != 'finished'
+            or match.home_score is None
+            or match.away_score is None
+        ):
+            return None
+
+        # Build MatchSummary compatible with rules
+        match_summary = MatchSummary(
+            match_id=match.id,
+            home_team_data=TeamData(
+                id=match.home_team.id,
+                name=match.home_team.name,
+                rank=match.home_team.rank,
+            ),
+            away_team_data=TeamData(
+                id=match.away_team.id,
+                name=match.away_team.name,
+                rank=match.away_team.rank,
+            ),
+            league=match.league.name,
+            country=match.league.country,
+            match_date=match.match_date.strftime('%Y-%m-%d %H:%M')
+            if match.match_date
+            else None,
+            home_score=match.home_score,
+            away_score=match.away_score,
+        )
+
+        # Extract team_analyzed from JSON details
+        try:
+            details = json.loads(opportunity.details) if opportunity.details else {}
+        except Exception:
+            details = {}
+        team_analyzed = details.get('team_analyzed')
+
+        engine = BettingRulesEngine()
+        rule = engine.get_rule_by_slug(opportunity.rule_slug)
+        if not rule:
+            return None
+        return rule.determine_outcome(match_summary, team_analyzed)
+
+    async def update_betting_outcomes(self) -> int:
+        """Evaluate and fill outcomes for pending opportunities when matches finished."""
+        # Select pending opportunities with finished matches having scores
+        result = await self.session.execute(
+            select(BettingOpportunity)
+            .options(
+                selectinload(BettingOpportunity.match).selectinload(Match.home_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.away_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.league),
+            )
+            .join(Match, BettingOpportunity.match_id == Match.id)
+            .where(
+                and_(
+                    BettingOpportunity.outcome.is_(None),
+                    Match.status == 'finished',
+                    Match.home_score.is_not(None),
+                    Match.away_score.is_not(None),
+                )
+            )
+        )
+        pending = result.scalars().all()
+
+        updated = 0
+        for opp in pending:
+            outcome = await self._determine_betting_outcome(opp, opp.match)
+            if outcome is not None:
+                opp.outcome = outcome.value
+                updated += 1
+        if updated:
+            await self.session.commit()
+        logger.info('Updated betting outcomes', count=updated)
+        return updated
