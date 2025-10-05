@@ -145,6 +145,34 @@ class BettingOpportunity(Base):
     def __repr__(self):
         return f"<BettingOpportunity(id={self.id}, rule_slug='{self.rule_slug}', outcome='{self.outcome}')>"
 
+    def get_details(self) -> dict:
+        """Get details as dictionary"""
+        if not self.details:
+            return {}
+        try:
+            import json
+
+            return json.loads(self.details)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def to_domain(self):
+        """Convert BettingOpportunity database model to Bet domain model"""
+        from app.bet_rules.structures import Bet, BettingOpportunity, MatchSummary
+
+        details = self.get_details()
+
+        match_summary = MatchSummary.from_match(self.match)
+
+        opportunity = BettingOpportunity(
+            slug=self.rule_slug,
+            confidence=self.confidence_score,
+            team_analyzed=details.get('team_analyzed', 'Unknown'),
+            details=details,
+        )
+
+        return Bet(match=match_summary, opportunity=opportunity)
+
 
 class TelegramUser(Base):
     """SQLAlchemy TelegramUser model"""

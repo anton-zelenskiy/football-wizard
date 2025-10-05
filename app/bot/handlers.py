@@ -13,9 +13,11 @@ from app.bot.notifications import (
     format_completed_opportunities_message,
     format_opportunities_message,
 )
+from app.db.repositories.betting_opportunity_repository import (
+    BettingOpportunityRepository,
+)
 from app.db.repositories.telegram_user_repository import TelegramUserRepository
 from app.db.session import get_async_db_session
-from app.db.storage import FootballDataStorage
 from app.settings import settings
 
 
@@ -379,12 +381,16 @@ async def opportunities_command(message: Message) -> None:
         finally:
             await session.close()
 
-        # Get all active betting opportunities (still using storage for now)
-        storage = FootballDataStorage()
-        opportunities = storage.get_active_betting_opportunities()
+        # Get all active betting opportunities via repository
+        async with get_async_db_session() as session:
+            opp_repo = BettingOpportunityRepository(session)
+            opportunities = await opp_repo.get_active_betting_opportunities()
+
+        # Convert SQLAlchemy objects to Bet objects
+        bet_opportunities = [opp.to_domain() for opp in opportunities]
 
         # Format and send the message
-        opportunities_text = format_opportunities_message(opportunities)
+        opportunities_text = format_opportunities_message(bet_opportunities)
         await message.answer(opportunities_text, parse_mode='HTML')
 
         logger.info(
@@ -420,14 +426,18 @@ async def completed_command(message: Message) -> None:
         finally:
             await session.close()
 
-        # Get completed betting opportunities and statistics (still using storage for now)
-        storage = FootballDataStorage()
-        opportunities = storage.get_completed_betting_opportunities(limit=20)
-        statistics = storage.get_betting_statistics()
+        # Use SQLAlchemy repository for completed opportunities and statistics
+        async with get_async_db_session() as session:
+            opp_repo = BettingOpportunityRepository(session)
+            opportunities = await opp_repo.get_completed_betting_opportunities(limit=20)
+            statistics = await opp_repo.get_betting_statistics()
+
+        # Convert SQLAlchemy objects to Bet objects
+        bet_opportunities = [opp.to_domain() for opp in opportunities]
 
         # Format and send the message
         completed_text = format_completed_opportunities_message(
-            opportunities, statistics
+            bet_opportunities, statistics
         )
         await message.answer(completed_text, parse_mode='HTML')
 

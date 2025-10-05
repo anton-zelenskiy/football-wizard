@@ -4,7 +4,6 @@ from typing import Any
 import structlog
 
 from app.bet_rules.structures import Bet
-from app.db.models import BettingOpportunity
 from app.db.repositories.telegram_user_repository import TelegramUserRepository
 from app.db.session import get_async_db_session
 
@@ -180,7 +179,7 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
     return message
 
 
-def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str:
+def format_opportunities_message(opportunities: list[Bet]) -> str:
     """Format betting opportunities message for display"""
     if not opportunities:
         return (
@@ -195,30 +194,21 @@ def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str
         f'Found {len(opportunities)} active opportunities:\n\n'
     )
 
-    for i, opp in enumerate(opportunities, 1):
-        # Convert BettingOpportunity to Bet to access opportunity_type
-        bet = opp.to_domain()
-
+    for i, bet in enumerate(opportunities, 1):
         confidence_emoji = (
             '🟢' if bet.confidence >= 0.8 else '🟡' if bet.confidence >= 0.6 else '🔴'
         )
 
-        # Get match information if available
-        match_info = ''
-        if opp.match:
-            match_info = f'⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}'
-            if opp.match.match_date:
-                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
-                match_info += f'\n📅 {match_date}'
-        else:
-            match_info = '⚽ Match details not available'
+        match_info = f'⚽ {bet.home_team} vs {bet.away_team}'
+        if bet.match_date:
+            match_info += f'\n📅 {bet.match_date}'
 
         message += (
             f'{i}. {confidence_emoji} <b>{bet.rule_name}</b>\n'
             f'   {match_info}\n'
             f'   🎯 Team Analyzed: {bet.team_analyzed}\n'
             f'   📊 Confidence: {bet.confidence:.1%}\n'
-            f'   🏟️ Type: {bet.opportunity_type.value.replace("_", " ").title()}\n'
+            f'   🏟️ Type: {bet.opportunity_type.replace("_", " ").title() if isinstance(bet.opportunity_type, str) else bet.opportunity_type.value.replace("_", " ").title()}\n'
         )
 
     message += 'Use /settings to adjust your notification preferences.'
@@ -227,7 +217,7 @@ def format_opportunities_message(opportunities: list[BettingOpportunity]) -> str
 
 
 def format_completed_opportunities_message(
-    opportunities: list[BettingOpportunity], statistics: dict
+    opportunities: list[Bet], statistics: dict
 ) -> str:
     """Format completed betting opportunities message with statistics"""
     if not opportunities:
@@ -253,39 +243,23 @@ def format_completed_opportunities_message(
         f'Showing last {len(opportunities)} completed opportunities:\n\n'
     )
 
-    for i, opp in enumerate(opportunities, 1):
-        # Convert BettingOpportunity to Bet to access opportunity_type
-        bet = opp.to_domain()
-
-        # Outcome emoji
-        outcome_emoji = (
-            '✅' if opp.outcome == 'win' else '❌' if opp.outcome == 'lose' else '⏳'
-        )
-
-        # Confidence emoji
+    for i, bet in enumerate(opportunities, 1):
+        # Outcome unknown at this layer; we only display bet summary
+        outcome_emoji = '⏳'
         confidence_emoji = (
             '🟢' if bet.confidence >= 0.8 else '🟡' if bet.confidence >= 0.6 else '🔴'
         )
 
-        # Get match information
-        match_info = ''
-        if opp.match:
-            match_info = f'⚽ {opp.match.home_team.name} vs {opp.match.away_team.name}'
-            if opp.match.home_score is not None and opp.match.away_score is not None:
-                match_info += f' ({opp.match.home_score}-{opp.match.away_score})'
-            if opp.match.match_date:
-                match_date = opp.match.match_date.strftime('%Y-%m-%d %H:%M')
-                match_info += f'\n📅 {match_date}'
-        else:
-            match_info = '⚽ Match details not available'
+        match_info = f'⚽ {bet.home_team} vs {bet.away_team}'
+        if bet.match_date:
+            match_info += f'\n📅 {bet.match_date}'
 
         message += (
             f'{i}. {outcome_emoji} <b>{bet.rule_name}</b>\n'
             f'   {match_info}\n'
             f'   🎯 Team Analyzed: {bet.team_analyzed}\n'
             f'   {confidence_emoji} Confidence: {bet.confidence:.1%}\n'
-            f'   🏟️ Type: {bet.opportunity_type.value.replace("_", " ").title()}\n'
-            f'   📅 Created: {opp.created_at.strftime("%Y-%m-%d %H:%M")}\n\n'
+            f'   🏟️ Type: {bet.opportunity_type.replace("_", " ").title() if isinstance(bet.opportunity_type, str) else bet.opportunity_type.value.replace("_", " ").title()}\n\n'
         )
 
     message += 'Use /opportunities to see active opportunities.'

@@ -13,6 +13,10 @@ from app.api.security import (
     get_telegram_webapp_data_optional,
     validate_request_origin,
 )
+from app.db.repositories.betting_opportunity_repository import (
+    BettingOpportunityRepository,
+)
+from app.db.session import get_async_db_session
 from app.db.storage import FootballDataStorage
 
 
@@ -60,12 +64,21 @@ async def get_betting_opportunities(
                 f'ip={client_ip}, username={webapp_data.username}'
             )
 
-        opportunities = storage.get_active_betting_opportunities()
+        # Fetch active opportunities via SQLAlchemy repository
+        async with get_async_db_session() as session:
+            opp_repo = BettingOpportunityRepository(session)
+            opportunities = await opp_repo.get_active_betting_opportunities()
 
         result = []
         for opp in opportunities:
             match = opp.match
-            details = opp.get_details()
+            # details come as JSON string in SQLAlchemy model
+            import json as _json
+
+            try:
+                details = _json.loads(opp.details) if opp.details else {}
+            except Exception:
+                details = {}
 
             opportunity_data = {
                 'id': opp.id,

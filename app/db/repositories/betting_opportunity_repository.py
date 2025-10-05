@@ -81,7 +81,11 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
         now = datetime.now()
         result = await self.session.execute(
             select(BettingOpportunity)
-            .options(selectinload(BettingOpportunity.match))
+            .options(
+                selectinload(BettingOpportunity.match).selectinload(Match.home_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.away_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.league),
+            )
             .join(Match, BettingOpportunity.match_id == Match.id)
             .where(and_(BettingOpportunity.outcome.is_(None), Match.match_date > now))
             .order_by(BettingOpportunity.confidence_score.desc())
@@ -95,7 +99,11 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
         now = datetime.now()
         result = await self.session.execute(
             select(BettingOpportunity)
-            .options(selectinload(BettingOpportunity.match))
+            .options(
+                selectinload(BettingOpportunity.match).selectinload(Match.home_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.away_team),
+                selectinload(BettingOpportunity.match).selectinload(Match.league),
+            )
             .join(Match, BettingOpportunity.match_id == Match.id)
             .where(
                 and_(BettingOpportunity.outcome.is_not(None), Match.match_date <= now)
