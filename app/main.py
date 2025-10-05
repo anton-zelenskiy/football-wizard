@@ -13,8 +13,7 @@ from app.api.middleware import MiniAppSecurityMiddleware, SecurityMiddleware
 from app.api.mini_app_routes import router as mini_app_router
 from app.api.root import router as root_router
 from app.bet_rules.rule_engine import BettingRulesEngine
-from app.db.models import create_tables
-from app.db.storage import FootballDataStorage
+from app.db.sqlalchemy_models import create_tables
 from app.settings import settings
 
 
@@ -32,7 +31,6 @@ async def lifespan(app: FastAPI) -> None:
     logger.info('Database tables created')
 
     # Initialize components
-    app.state.storage = FootballDataStorage()
     app.state.rules_engine = BettingRulesEngine()
 
     logger.info('App startup completed')

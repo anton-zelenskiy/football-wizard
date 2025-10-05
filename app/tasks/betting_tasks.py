@@ -10,7 +10,6 @@ from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.match_repository import MatchRepository
 from app.db.repositories.team_repository import TeamRepository
 from app.db.session import get_async_db_session
-from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
 
 
@@ -20,7 +19,6 @@ logger = structlog.get_logger()
 class BettingTasks:
     def __init__(self) -> None:
         self.rules_engine = BettingRulesEngine()
-        self.storage = FootballDataStorage()
         self.match_repo = None  # Will be initialized in each task
 
     async def daily_scheduled_analysis_task(self, ctx) -> None:

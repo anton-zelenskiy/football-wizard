@@ -4,7 +4,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.bet_rules.team_analysis import MatchData, TeamAnalysis, TeamData
-from app.db.models import Match
 
 
 class BetType(str, Enum):
@@ -487,7 +486,7 @@ class MatchSummary(BaseModel):
         return None  # Team not found
 
     @classmethod
-    def from_match(cls, match: 'Match') -> 'MatchSummary':
+    def from_match(cls, match) -> 'MatchSummary':
         """Create MatchSummary from Match database model"""
         return cls(
             match_id=match.id,

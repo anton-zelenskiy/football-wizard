@@ -17,16 +17,12 @@ from app.db.repositories.betting_opportunity_repository import (
     BettingOpportunityRepository,
 )
 from app.db.session import get_async_db_session
-from app.db.storage import FootballDataStorage
 
 
 logger = structlog.get_logger()
 
 # Create router
 router = APIRouter()
-
-# Initialize storage
-storage = FootballDataStorage()
 
 
 @router.get('/betting-opportunities')
