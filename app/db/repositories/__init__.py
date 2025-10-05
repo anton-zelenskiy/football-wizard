@@ -5,6 +5,7 @@ Repository layer for database operations using SQLAlchemy
 from .base_repository import BaseRepository
 from .league_repository import LeagueRepository
 from .match_repository import MatchRepository
+from .team_repository import TeamRepository
 from .telegram_user_repository import TelegramUserRepository
 
 
@@ -13,4 +14,5 @@ __all__ = [
     'TelegramUserRepository',
     'MatchRepository',
     'LeagueRepository',
+    'TeamRepository',
 ]

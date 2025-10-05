@@ -5,6 +5,7 @@ from app.bet_rules.structures import Bet, MatchSummary
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
 from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.match_repository import MatchRepository
+from app.db.repositories.team_repository import TeamRepository
 from app.db.session import get_async_db_session
 from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
@@ -248,8 +249,11 @@ class BettingTasks:
         try:
             standings = await scraper.scrape_league_standings(country, league_name)
             if standings:
-                for team in standings:
-                    self.storage.save_team_standings(team, league_name, country)
+                # Save/update teams via repository
+                async with get_async_db_session() as session:
+                    team_repo = TeamRepository(session)
+                    for team in standings:
+                        await team_repo.save_team_standings(team, league_name, country)
                 stats['standings_count'] = len(standings)
                 logger.debug(
                     f'Saved {len(standings)} team standings for {country} - {league_name}'

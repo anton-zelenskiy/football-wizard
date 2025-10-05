@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 import structlog
@@ -7,9 +6,7 @@ import structlog
 from app.bet_rules.structures import Bet, BetOutcome, MatchSummary
 from app.db.models import (
     BettingOpportunity,
-    League,
     Match,
-    Team,
     db,
 )
 
@@ -36,61 +33,6 @@ def normalize_country_name(country: str) -> str:
 class FootballDataStorage:
     def __init__(self) -> None:
         self.db = db
-
-    def save_league(self, league_data: LeagueData) -> None:
-        """Save a single league from LeagueData model"""
-        with self.db.atomic():
-            # Normalize country name to prevent duplicates
-            normalized_country = normalize_country_name(league_data.country_name)
-
-            league, created = League.get_or_create(
-                name=league_data.league_name,
-                country=normalized_country,
-            )
-            if created:
-                logger.info(f'Created new league: {league.name}')
-
-    def save_team_standings(
-        self, team_data: dict[str, Any], league_name: str, country: str
-    ) -> None:
-        """Save league standings/team statistics"""
-        # Normalize country name to prevent duplicates
-        normalized_country = normalize_country_name(country)
-
-        try:
-            league = League.get(
-                (League.name == league_name) & (League.country == normalized_country)
-            )
-        except League.DoesNotExist:
-            logger.error(f'League not found: {normalized_country} - {league_name}')
-            return
-
-        with self.db.atomic():
-            team_name = team_data.get('team', {}).get('name', '')
-            if not team_name:
-                logger.error(f'Team not found: {team_data}')
-                return
-
-            team, created = Team.get_or_create(name=team_name, league=league)
-
-            # Update team statistics
-            team.rank = team_data.get('rank')
-            team.games_played = team_data.get('all', {}).get('played', 0)
-            team.wins = team_data.get('all', {}).get('win', 0)
-            team.draws = team_data.get('all', {}).get('draw', 0)
-            team.losses = team_data.get('all', {}).get('lose', 0)
-            team.goals_scored = team_data.get('all', {}).get('goals', {}).get('for', 0)
-            team.goals_conceded = (
-                team_data.get('all', {}).get('goals', {}).get('against', 0)
-            )
-            team.points = team_data.get('points', 0)
-            team.updated_at = datetime.now()
-            team.save()
-
-            if created:
-                logger.info(f'Created new team: {team.name}')
-            else:
-                logger.debug(f'Updated team statistics: {team.name}')
 
     def update_betting_outcomes(self) -> None:
         """Update betting outcomes based on finished matches"""
