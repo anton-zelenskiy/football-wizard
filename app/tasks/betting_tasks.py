@@ -3,9 +3,10 @@ import structlog
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.bet_rules.structures import Bet, MatchSummary
 from app.bot.notifications import send_betting_opportunity, send_daily_summary
+from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.match_repository import MatchRepository
 from app.db.session import get_async_db_session
-from app.db.storage import FootballDataStorage, LeagueData
+from app.db.storage import FootballDataStorage
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
 
 
@@ -238,9 +239,10 @@ class BettingTasks:
         """Process a single league: scrape and save all data iteratively"""
         stats = {'standings_count': 0, 'matches_count': 0, 'fixtures_count': 0}
 
-        # Save league first
-        league_data = LeagueData(league_name=league_name, country_name=country)
-        self.storage.save_league(league_data)
+        # Save league first using repository
+        async with get_async_db_session() as session:
+            league_repo = LeagueRepository(session)
+            await league_repo.save_league(league_name, country)
 
         # Scrape and save standings iteratively
         try:
