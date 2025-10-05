@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     min_no_goals_matches: int = 2
     live_draw_minute_threshold: int = 70
 
+    # Admin Configuration
+    admin_secret_key: str = 'your-secret-key-change-in-production'
+    admin_session_secret: str = 'your-session-secret-change-in-production'
+    admin_token_expire_minutes: int = 30
+
     class Config:
         env_file = '.env'
         env_prefix = ''

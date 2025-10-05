@@ -24,7 +24,7 @@ httpx
 playwright
 
 # Settings/validation
-pydantic
+pydantic[email]
 pydantic-settings
 
 # Logging
@@ -37,3 +37,9 @@ pytest-asyncio
 # Development tools
 pre-commit
 ruff
+
+# Admin panel
+starlette-admin
+python-multipart
+passlib==1.7.4
+python-jose[cryptography]

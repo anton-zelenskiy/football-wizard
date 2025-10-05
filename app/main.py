@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
 
+from app.admin.init_admin import init_admin
+from app.admin.routes import router as admin_router
+from app.admin.starlette_admin_config import create_admin_app
 from app.api.bot_routes import router as bot_router
 from app.api.middleware import MiniAppSecurityMiddleware, SecurityMiddleware
 from app.api.mini_app_routes import router as mini_app_router
@@ -29,6 +32,10 @@ async def lifespan(app: FastAPI) -> None:
     # Create database tables
     create_tables()
     logger.info('Database tables created')
+
+    # Initialize admin system
+    init_admin()
+    logger.info('Admin system initialized')
 
     # Initialize components
     app.state.rules_engine = BettingRulesEngine()
@@ -65,3 +72,8 @@ app.add_middleware(
 app.include_router(root_router, prefix='/football')
 app.include_router(bot_router, prefix='/football/api/v1/bot')
 app.include_router(mini_app_router, prefix='/football/api/v1/mini-app')
+app.include_router(admin_router, prefix='/football/api/v1/admin')
+
+# Mount starlette-admin
+admin_app = create_admin_app()
+admin_app.mount_to(app)
