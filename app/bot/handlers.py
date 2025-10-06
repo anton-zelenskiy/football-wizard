@@ -35,8 +35,7 @@ async def start_command(message: Message) -> None:
     last_name = message.from_user.last_name
 
     # Get or create user using new repository
-    session = get_async_db_session()
-    try:
+    async with get_async_db_session() as session:
         repo = TelegramUserRepository(session)
         user, created = await repo.get_or_create(
             telegram_id=user_id,
@@ -44,8 +43,6 @@ async def start_command(message: Message) -> None:
             first_name=first_name,
             last_name=last_name,
         )
-    finally:
-        await session.close()
 
     welcome_text = (
         f'🎯 Welcome to Football Betting Analysis Bot!\n\n'
@@ -142,14 +139,11 @@ async def status_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.get_by_telegram_id(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         status_text = (
             f'📊 Your Subscription Status\n\n'
@@ -209,12 +203,9 @@ async def subscribe_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.subscribe_user(user_id)
-        finally:
-            await session.close()
 
         await message.answer(
             '✅ Successfully subscribed to all notifications!\n\n'
@@ -238,12 +229,9 @@ async def unsubscribe_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.unsubscribe_user(user_id)
-        finally:
-            await session.close()
 
         await message.answer(
             '🔕 Successfully unsubscribed from all notifications.\n\n'
@@ -263,14 +251,11 @@ async def daily_on_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.update_notifications(
                 telegram_id=user_id, daily_notifications=True
             )
-        finally:
-            await session.close()
 
         await message.answer(
             '✅ Daily notifications enabled!\n\n'
@@ -290,14 +275,11 @@ async def daily_off_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.update_notifications(
                 telegram_id=user_id, daily_notifications=False
             )
-        finally:
-            await session.close()
 
         await message.answer(
             '🔕 Daily notifications disabled.\n\n'
@@ -317,14 +299,11 @@ async def live_on_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.update_notifications(
                 telegram_id=user_id, live_notifications=True
             )
-        finally:
-            await session.close()
 
         await message.answer(
             '✅ Live notifications enabled!\n\n'
@@ -344,14 +323,11 @@ async def live_off_command(message: Message) -> None:
     user_id = message.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.update_notifications(
                 telegram_id=user_id, live_notifications=False
             )
-        finally:
-            await session.close()
 
         await message.answer(
             '🔕 Live notifications disabled.\n\n'
@@ -372,14 +348,11 @@ async def opportunities_command(message: Message) -> None:
 
     try:
         # Check if user is registered
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.get_by_telegram_id(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         # Get all active betting opportunities via repository
         async with get_async_db_session() as session:
@@ -417,14 +390,11 @@ async def completed_command(message: Message) -> None:
 
     try:
         # Check if user is registered
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.get_by_telegram_id(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         # Use SQLAlchemy repository for completed opportunities and statistics
         async with get_async_db_session() as session:
@@ -482,12 +452,9 @@ async def handle_subscribe_callback(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.subscribe_user(user_id)
-        finally:
-            await session.close()
 
         await callback.message.edit_text(
             '✅ Successfully subscribed to all notifications!'
@@ -507,12 +474,9 @@ async def handle_unsubscribe_callback(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             await repo.unsubscribe_user(user_id)
-        finally:
-            await session.close()
 
         await callback.message.edit_text(
             '🔕 Successfully unsubscribed from all notifications.'
@@ -532,14 +496,11 @@ async def handle_toggle_daily(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.toggle_daily_notifications(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         status = 'enabled' if user.daily_notifications else 'disabled'
         await callback.message.edit_text(f'✅ Daily notifications {status}!')
@@ -560,14 +521,11 @@ async def handle_toggle_live(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
 
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.toggle_live_notifications(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         status = 'enabled' if user.live_notifications else 'disabled'
         await callback.message.edit_text(f'✅ Live notifications {status}!')
@@ -584,14 +542,11 @@ async def handle_toggle_live(callback: CallbackQuery) -> None:
 async def _show_settings(user_id: int, chat_id: int) -> None:
     """Show settings menu"""
     try:
-        session = get_async_db_session()
-        try:
+        async with get_async_db_session() as session:
             repo = TelegramUserRepository(session)
             user = await repo.get_by_telegram_id(user_id)
             if not user:
                 raise Exception('User not found')
-        finally:
-            await session.close()
 
         settings_text = (
             f'⚙️ Notification Settings\n\n'

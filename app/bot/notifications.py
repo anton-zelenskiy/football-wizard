@@ -27,53 +27,51 @@ def get_bot_instance() -> Any:
 
 async def send_betting_opportunity(opportunity: Bet) -> None:
     """Send betting opportunity to users subscribed to live notifications"""
-    session = get_async_db_session()
-    try:
-        # Get users subscribed to live notifications using our repository
-        repo = TelegramUserRepository(session)
-        users = await repo.get_users_for_live_notifications()
-        bot = get_bot_instance()
+    async with get_async_db_session() as session:
+        try:
+            # Get users subscribed to live notifications using our repository
+            repo = TelegramUserRepository(session)
+            users = await repo.get_users_for_live_notifications()
+            bot = get_bot_instance()
 
-        message_text = _format_opportunity_message(opportunity)
+            message_text = _format_opportunity_message(opportunity)
 
-        for user in users:
-            try:
-                await bot.send_message(
-                    user.telegram_id, message_text, parse_mode='HTML'
-                )
+            for user in users:
+                try:
+                    await bot.send_message(
+                        user.telegram_id, message_text, parse_mode='HTML'
+                    )
 
-                # Log the notification using our repository
-                await repo.log_notification(
-                    user=user,
-                    opportunity_id=None,  # Will be set when we have DB opportunity
-                    message=message_text,
-                    success=True,
-                )
+                    # Log the notification using our repository
+                    await repo.log_notification(
+                        user=user,
+                        opportunity_id=None,  # Will be set when we have DB opportunity
+                        message=message_text,
+                        success=True,
+                    )
 
-                # Add delay to avoid rate limiting
-                await asyncio.sleep(0.1)
+                    # Add delay to avoid rate limiting
+                    await asyncio.sleep(0.1)
 
-            except Exception as e:
-                logger.error(
-                    f'Failed to send notification to user {user.telegram_id}',
-                    error=str(e),
-                )
+                except Exception as e:
+                    logger.error(
+                        f'Failed to send notification to user {user.telegram_id}',
+                        error=str(e),
+                    )
 
-                # Log the failed notification using our repository
-                await repo.log_notification(
-                    user=user,
-                    opportunity_id=None,
-                    message=message_text,
-                    success=False,
-                    error_message=str(e),
-                )
+                    # Log the failed notification using our repository
+                    await repo.log_notification(
+                        user=user,
+                        opportunity_id=None,
+                        message=message_text,
+                        success=False,
+                        error_message=str(e),
+                    )
 
-        logger.info(f'Sent live betting opportunity to {len(users)} users')
+            logger.info(f'Sent live betting opportunity to {len(users)} users')
 
-    except Exception as e:
-        logger.error('Error sending betting opportunities', error=str(e))
-    finally:
-        await session.close()
+        except Exception as e:
+            logger.error('Error sending betting opportunities', error=str(e))
 
 
 def _format_opportunity_message(opportunity: Bet) -> str:
@@ -105,38 +103,36 @@ async def send_daily_summary(opportunities: list[Bet]) -> None:
     if not opportunities:
         return
 
-    session = get_async_db_session()
-    try:
-        # Get users subscribed to daily notifications using our repository
-        repo = TelegramUserRepository(session)
-        users = await repo.get_users_for_daily_notifications()
-        bot = get_bot_instance()
+    async with get_async_db_session() as session:
+        try:
+            # Get users subscribed to daily notifications using our repository
+            repo = TelegramUserRepository(session)
+            users = await repo.get_users_for_daily_notifications()
+            bot = get_bot_instance()
 
-        # Sort opportunities by confidence (highest first)
-        sorted_opportunities = sorted(
-            opportunities, key=lambda x: x.confidence, reverse=True
-        )
-        summary_text = _format_daily_summary(sorted_opportunities)
+            # Sort opportunities by confidence (highest first)
+            sorted_opportunities = sorted(
+                opportunities, key=lambda x: x.confidence, reverse=True
+            )
+            summary_text = _format_daily_summary(sorted_opportunities)
 
-        for user in users:
-            try:
-                await bot.send_message(
-                    user.telegram_id, summary_text, parse_mode='HTML'
-                )
-                await asyncio.sleep(0.1)
+            for user in users:
+                try:
+                    await bot.send_message(
+                        user.telegram_id, summary_text, parse_mode='HTML'
+                    )
+                    await asyncio.sleep(0.1)
 
-            except Exception as e:
-                logger.error(
-                    f'Failed to send daily summary to user {user.telegram_id}',
-                    error=str(e),
-                )
+                except Exception as e:
+                    logger.error(
+                        f'Failed to send daily summary to user {user.telegram_id}',
+                        error=str(e),
+                    )
 
-        logger.info(f'Sent daily summary to {len(users)} users')
+            logger.info(f'Sent daily summary to {len(users)} users')
 
-    except Exception as e:
-        logger.error('Error sending daily summary', error=str(e))
-    finally:
-        await session.close()
+        except Exception as e:
+            logger.error('Error sending daily summary', error=str(e))
 
 
 def _format_daily_summary(opportunities: list[Bet]) -> str:
