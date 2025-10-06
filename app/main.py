@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 import structlog
 
 from app.admin.init_admin import init_admin
@@ -58,6 +59,9 @@ app = FastAPI(
 # Add security middleware
 app.add_middleware(SecurityMiddleware, max_requests_per_minute=60)
 app.add_middleware(MiniAppSecurityMiddleware)
+
+# Session for starlette-admin auth provider
+app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
 
 # Add CORS middleware
 app.add_middleware(

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     admin_secret_key: str = 'your-secret-key-change-in-production'
     admin_session_secret: str = 'your-session-secret-change-in-production'
     admin_token_expire_minutes: int = 30
+    admin_username: str = 'superadmin'
+    admin_password: str = 'strong_secret_123'  # noqa: S105
+    admin_email: str = 'admin@example.com'
 
     class Config:
         env_file = '.env'
