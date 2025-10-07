@@ -25,13 +25,25 @@ def get_bot_instance() -> Any:
     return _bot_instance
 
 
-async def send_betting_opportunity(opportunity: Bet) -> None:
+async def send_betting_opportunity(
+    opportunity: Bet, opportunity_id: int | None = None
+) -> None:
     """Send betting opportunity to users subscribed to live notifications"""
     async with get_async_db_session() as session:
         try:
             # Get users subscribed to live notifications using our repository
             repo = TelegramUserRepository(session)
-            users = await repo.get_users_for_live_notifications()
+
+            # If we have an opportunity_id, check for duplicates
+            if opportunity_id:
+                users = (
+                    await repo.get_users_for_live_notifications_with_duplicate_check(
+                        opportunity_id
+                    )
+                )
+            else:
+                users = await repo.get_users_for_live_notifications()
+
             bot = get_bot_instance()
 
             message_text = _format_opportunity_message(opportunity)
@@ -45,7 +57,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     # Log the notification using our repository
                     await repo.log_notification(
                         user=user,
-                        opportunity_id=None,  # Will be set when we have DB opportunity
+                        opportunity_id=opportunity_id,
                         message=message_text,
                         success=True,
                     )
@@ -62,7 +74,7 @@ async def send_betting_opportunity(opportunity: Bet) -> None:
                     # Log the failed notification using our repository
                     await repo.log_notification(
                         user=user,
-                        opportunity_id=None,
+                        opportunity_id=opportunity_id,
                         message=message_text,
                         success=False,
                         error_message=str(e),

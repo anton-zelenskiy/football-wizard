@@ -269,3 +269,47 @@ class TelegramUserRepository(BaseRepository[TelegramUser]):
             await self.session.rollback()
             logger.error(f'Error logging notification: {e}')
             raise
+
+    async def has_notification_been_sent(
+        self, user: TelegramUser, opportunity_id: int
+    ) -> bool:
+        """Check if a notification has already been sent to a user for a specific opportunity"""
+        try:
+            result = await self.session.execute(
+                select(NotificationLog).where(
+                    NotificationLog.user_id == user.id,
+                    NotificationLog.opportunity_id == opportunity_id,
+                    NotificationLog.success.is_(True),
+                )
+            )
+            return result.scalar_one_or_none() is not None
+        except Exception as e:
+            logger.error(f'Error checking notification history: {e}')
+            return False
+
+    async def get_users_for_live_notifications_with_duplicate_check(
+        self, opportunity_id: int
+    ) -> list[TelegramUser]:
+        """Get users subscribed to live notifications who haven't received this opportunity yet"""
+        try:
+            # Get all users subscribed to live notifications
+            result = await self.session.execute(
+                select(TelegramUser).where(
+                    TelegramUser.is_active.is_(True),
+                    TelegramUser.live_notifications.is_(True),
+                )
+            )
+            all_users = result.scalars().all()
+
+            # Filter out users who have already received this opportunity
+            users_to_notify = []
+            for user in all_users:
+                if not await self.has_notification_been_sent(user, opportunity_id):
+                    users_to_notify.append(user)
+
+            return users_to_notify
+        except Exception as e:
+            logger.error(
+                f'Error getting users for live notifications with duplicate check: {e}'
+            )
+            return []

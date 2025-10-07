@@ -130,9 +130,19 @@ class BettingTasks:
                         all_opportunities
                     )
 
-                    # Send immediate notifications for live opportunities
+                    # Send immediate notifications for live opportunities with duplicate prevention
                     for opp in saved_opportunities:
-                        await send_betting_opportunity(opp)
+                        # Get the database opportunity ID for duplicate prevention
+                        async with get_async_db_session() as session:
+                            opp_repo = BettingOpportunityRepository(session)
+                            db_opportunity = (
+                                await opp_repo._find_existing_opportunity_by_bet(opp)
+                            )
+                            if db_opportunity:
+                                await send_betting_opportunity(opp, db_opportunity.id)
+                            else:
+                                # Fallback to sending without duplicate check if DB opportunity not found
+                                await send_betting_opportunity(opp)
 
                     logger.info(
                         f'Live analysis completed: {len(all_opportunities)} opportunities found'
