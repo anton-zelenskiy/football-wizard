@@ -22,6 +22,28 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, BettingOpportunity)
 
+    async def get_by_id(self, id: int):
+        """Get entity by ID"""
+        try:
+            result = await self.session.execute(
+                select(self.model_class)
+                .options(
+                    selectinload(BettingOpportunity.match).selectinload(
+                        Match.home_team
+                    ),
+                    selectinload(BettingOpportunity.match).selectinload(
+                        Match.away_team
+                    ),
+                    selectinload(BettingOpportunity.match).selectinload(Match.league),
+                )
+                .join(Match, BettingOpportunity.match_id == Match.id)
+                .where(self.model_class.id == id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f'Error getting {self.model_class.__name__} by ID {id}: {e}')
+            raise
+
     async def _find_existing_opportunity(
         self, match_id: int | None, rule_slug: str
     ) -> BettingOpportunity | None:
