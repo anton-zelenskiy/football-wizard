@@ -10,8 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import structlog
 
 from app.admin.init_admin import init_admin
-from app.admin.routes import router as admin_router
-from app.admin.starlette_admin_config import create_admin_app
+from app.admin.sqladmin_config import create_admin_app
 from app.api.bot_routes import router as bot_router
 from app.api.middleware import MiniAppSecurityMiddleware, SecurityMiddleware
 from app.api.mini_app_routes import router as mini_app_router
@@ -60,8 +59,9 @@ app = FastAPI(
 app.add_middleware(SecurityMiddleware, max_requests_per_minute=60)
 app.add_middleware(MiniAppSecurityMiddleware)
 
-# Session for starlette-admin auth provider
+# Add session middleware for SQLAdmin authentication
 app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -76,8 +76,6 @@ app.add_middleware(
 app.include_router(root_router, prefix='/football')
 app.include_router(bot_router, prefix='/football/api/v1/bot')
 app.include_router(mini_app_router, prefix='/football/api/v1/mini-app')
-app.include_router(admin_router, prefix='/football/api/v1/admin')
 
-# Mount starlette-admin
-admin_app = create_admin_app()
-admin_app.mount_to(app)
+# Mount SQLAdmin
+create_admin_app(app)

@@ -41,10 +41,7 @@ class League(Base):
     matches = relationship('Match', back_populates='league')
 
     def __repr__(self):
-        return f"<League(id={self.id}, name='{self.name}', country='{self.country}')>"
-
-    async def __admin_repr__(self, request):
-        return f'{self.name}'
+        return f'{self.name} ({self.country})'
 
 
 class Team(Base):
