@@ -106,7 +106,7 @@ class SQLAdminAuth(AuthenticationBackend):
             try:
                 user = (
                     db.query(AdminUser)
-                    .filter(AdminUser.id == user_id, AdminUser.is_active is True)
+                    .filter(AdminUser.id == user_id, AdminUser.is_active == True)  # noqa: E712
                     .first()
                 )
 
