@@ -1,7 +1,3 @@
-"""
-Starlette-admin configuration for Football Betting Analysis
-"""
-
 from sqlalchemy import create_engine
 from starlette_admin.contrib.sqla import Admin, ModelView
 

@@ -1,7 +1,3 @@
-"""
-Initialize admin user and setup
-"""
-
 import os
 
 import structlog

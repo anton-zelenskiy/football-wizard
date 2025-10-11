@@ -43,6 +43,9 @@ class League(Base):
     def __repr__(self):
         return f"<League(id={self.id}, name='{self.name}', country='{self.country}')>"
 
+    async def __admin_repr__(self, request):
+        return f'{self.name}'
+
 
 class Team(Base):
     """SQLAlchemy Team model"""
@@ -74,6 +77,9 @@ class Team(Base):
 
     def __repr__(self):
         return f"<Team(id={self.id}, name='{self.name}', league_id={self.league_id})>"
+
+    async def __admin_repr__(self, request):
+        return f'{self.name}'
 
 
 class Match(Base):

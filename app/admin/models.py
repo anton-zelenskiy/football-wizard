@@ -1,7 +1,3 @@
-"""
-Admin models for authentication and user management
-"""
-
 from datetime import datetime
 
 from passlib.context import CryptContext
