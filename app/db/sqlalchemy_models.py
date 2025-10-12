@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from sqlalchemy import (
     Boolean,
@@ -14,6 +15,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 import structlog
+
+from app.bet_rules.structures import BetOutcome
 
 
 logger = structlog.get_logger()
@@ -40,7 +43,7 @@ class League(Base):
     teams = relationship('Team', back_populates='league')
     matches = relationship('Match', back_populates='league')
 
-    def __repr__(self):
+    def __str__(self):
         return f'{self.name} ({self.country})'
 
 
@@ -72,10 +75,7 @@ class Team(Base):
         'Match', foreign_keys='Match.away_team_id', back_populates='away_team'
     )
 
-    def __repr__(self):
-        return f"<Team(id={self.id}, name='{self.name}', league_id={self.league_id})>"
-
-    async def __admin_repr__(self, request):
+    def __str__(self):
         return f'{self.name}'
 
 
@@ -101,17 +101,23 @@ class Match(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
-    league = relationship('League', back_populates='matches')
+    league = relationship('League', back_populates='matches', lazy='selectin')
     home_team = relationship(
-        'Team', foreign_keys=[home_team_id], back_populates='home_matches'
+        'Team',
+        foreign_keys=[home_team_id],
+        back_populates='home_matches',
+        lazy='selectin',
     )
     away_team = relationship(
-        'Team', foreign_keys=[away_team_id], back_populates='away_matches'
+        'Team',
+        foreign_keys=[away_team_id],
+        back_populates='away_matches',
+        lazy='selectin',
     )
     betting_opportunities = relationship('BettingOpportunity', back_populates='match')
 
-    def __repr__(self):
-        return f"<Match(id={self.id}, home_team_id={self.home_team_id}, away_team_id={self.away_team_id}, status='{self.status}')>"
+    def __str__(self):
+        return f'{self.home_team.name} - {self.away_team.name} ({self.status})'
 
     def to_pydantic(self):
         """Convert SQLAlchemy Match model to Pydantic MatchData"""
@@ -138,23 +144,25 @@ class BettingOpportunity(Base):
     rule_slug = Column(String, nullable=False)
     confidence_score = Column(Float, default=0.0)
     details = Column(Text, nullable=True)  # JSON string
-    outcome = Column(String, nullable=True)  # win, lose, pending, cancelled
+    outcome = Column(
+        String, nullable=False, default=BetOutcome.UNKNOWN.value
+    )  # win, lose, unknown
     created_at = Column(DateTime, default=datetime.now)
 
     # Relationships
-    match = relationship('Match', back_populates='betting_opportunities')
+    match = relationship(
+        'Match', back_populates='betting_opportunities', lazy='selectin'
+    )
     notifications = relationship('NotificationLog', back_populates='opportunity')
 
-    def __repr__(self):
-        return f"<BettingOpportunity(id={self.id}, rule_slug='{self.rule_slug}', outcome='{self.outcome}')>"
+    def __str__(self):
+        return f'{self.match.home_team.name} - {self.match.away_team.name}; {self.rule_slug}; {self.outcome}'
 
     def get_details(self) -> dict:
         """Get details as dictionary"""
         if not self.details:
             return {}
         try:
-            import json
-
             return json.loads(self.details)
         except (json.JSONDecodeError, TypeError):
             return {}
@@ -196,8 +204,8 @@ class TelegramUser(Base):
     # Relationships
     notifications = relationship('NotificationLog', back_populates='user')
 
-    def __repr__(self):
-        return f"<TelegramUser(id={self.id}, telegram_id={self.telegram_id}, username='{self.username}')>"
+    def __str__(self):
+        return f'{self.username}: {self.telegram_id}'
 
 
 class NotificationLog(Base):
@@ -214,10 +222,12 @@ class NotificationLog(Base):
     error_message = Column(Text, nullable=True)
 
     # Relationships
-    user = relationship('TelegramUser', back_populates='notifications')
-    opportunity = relationship('BettingOpportunity', back_populates='notifications')
+    user = relationship('TelegramUser', back_populates='notifications', lazy='selectin')
+    opportunity = relationship(
+        'BettingOpportunity', back_populates='notifications', lazy='selectin'
+    )
 
-    def __repr__(self):
+    def __str__(self):
         return f'<NotificationLog(id={self.id}, user_id={self.user_id}, success={self.success})>'
 
 

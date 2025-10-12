@@ -1,7 +1,3 @@
-"""
-SQLAdmin configuration for Football Betting Analysis
-"""
-
 from sqladmin import Admin, ModelView
 from sqladmin.filters import (
     AllUniqueStringValuesFilter,
@@ -78,8 +74,6 @@ class TeamAdmin(ModelView, model=Team):
     column_sortable_list = [Team.id, Team.name, Team.rank, Team.points]
     column_filters = [
         ForeignKeyFilter(Team.league_id, League.name, title='League'),
-        AllUniqueStringValuesFilter(Team.rank, title='Rank'),
-        AllUniqueStringValuesFilter(Team.points, title='Points'),
     ]
 
     # Form configuration
@@ -165,6 +159,7 @@ class BettingOpportunityAdmin(ModelView, model=BettingOpportunity):
         BettingOpportunity.rule_slug,
         BettingOpportunity.confidence_score,
         BettingOpportunity.outcome,
+        BettingOpportunity.created_at,
     ]
     column_details_list = [
         BettingOpportunity.id,
@@ -184,7 +179,6 @@ class BettingOpportunityAdmin(ModelView, model=BettingOpportunity):
         BettingOpportunity.created_at,
     ]
     column_filters = [
-        ForeignKeyFilter(BettingOpportunity.match_id, Match.id, title='Match'),
         AllUniqueStringValuesFilter(BettingOpportunity.rule_slug, title='Rule Slug'),
         AllUniqueStringValuesFilter(BettingOpportunity.outcome, title='Outcome'),
     ]

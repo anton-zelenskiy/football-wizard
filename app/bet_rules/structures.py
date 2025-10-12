@@ -30,6 +30,7 @@ class BetOutcome(str, Enum):
 
     WIN = 'win'
     LOSE = 'lose'
+    UNKNOWN = 'unknown'
 
 
 class OpportunityType(str, Enum):
