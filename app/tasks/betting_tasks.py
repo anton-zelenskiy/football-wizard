@@ -30,7 +30,6 @@ class BettingTasks:
             async with get_async_db_session() as session:
                 self.match_repo = MatchRepository(session)
 
-                # Get scheduled matches and analyze each one
                 scheduled_matches = await self.match_repo.get_matches_by_status(
                     'scheduled'
                 )
@@ -38,7 +37,6 @@ class BettingTasks:
 
                 for match in scheduled_matches:
                     try:
-                        # Convert Match to MatchSummary and populate recent matches
                         match_summary = (
                             await self._create_match_summary_with_recent_matches(match)
                         )
