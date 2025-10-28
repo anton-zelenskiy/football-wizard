@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 class BettingTasks:
     def __init__(self) -> None:
         self.rules_engine = BettingRulesEngine()
-        self.match_repo = None  # Will be initialized in each task
+        self.match_repo = None
 
     async def daily_scheduled_analysis_task(self, ctx) -> None:
         """Daily task to analyze scheduled matches and find betting opportunities"""
@@ -56,12 +56,16 @@ class BettingTasks:
 
                 if all_opportunities:
                     # Save opportunities to database iteratively (with duplicate prevention)
-                    saved_opportunities = await self._save_opportunities_iteratively(
-                        all_opportunities
+                    saved_opportunities_data = (
+                        await self._save_opportunities_iteratively(all_opportunities)
                     )
 
                     # Only send notifications for newly created opportunities
-                    if saved_opportunities:
+                    if saved_opportunities_data:
+                        # Extract just the Bet objects for daily summary
+                        saved_opportunities = [
+                            opp for opp, _ in saved_opportunities_data
+                        ]
                         await send_daily_summary(saved_opportunities)
                         logger.info(
                             f'Daily scheduled analysis completed: {len(saved_opportunities)} new opportunities found and notified'
@@ -126,23 +130,23 @@ class BettingTasks:
 
                 if all_opportunities:
                     # Save opportunities to database iteratively
-                    saved_opportunities = await self._save_opportunities_iteratively(
-                        all_opportunities
+                    saved_opportunities_data = (
+                        await self._save_opportunities_iteratively(all_opportunities)
                     )
 
                     # Send immediate notifications for live opportunities with duplicate prevention
-                    for opp in saved_opportunities:
-                        # Get the database opportunity ID for duplicate prevention
-                        async with get_async_db_session() as session:
-                            opp_repo = BettingOpportunityRepository(session)
-                            db_opportunity = (
-                                await opp_repo._find_existing_opportunity_by_bet(opp)
-                            )
-                            if db_opportunity:
-                                await send_betting_opportunity(opp, db_opportunity.id)
+                    for opp, opportunity_id in saved_opportunities_data:
+                        try:
+                            if opportunity_id:
+                                await send_betting_opportunity(opp, opportunity_id)
                             else:
-                                # Fallback to sending without duplicate check if DB opportunity not found
+                                # Fallback to sending without duplicate check if opportunity_id is None
                                 await send_betting_opportunity(opp)
+                        except Exception as e:
+                            logger.error(
+                                f'Error sending notification for opportunity {opp.rule_name}: {e}'
+                            )
+                            continue
 
                     logger.info(
                         f'Live analysis completed: {len(all_opportunities)} opportunities found'
@@ -158,7 +162,7 @@ class BettingTasks:
 
     async def _save_opportunities_iteratively(
         self, opportunities: list[Bet]
-    ) -> list[Bet]:
+    ) -> list[tuple[Bet, int | None]]:
         """Save betting opportunities iteratively with error handling and duplicate tracking"""
         saved_opportunities = []
         new_opportunities = 0
@@ -171,8 +175,8 @@ class BettingTasks:
             for opp in opportunities:
                 try:
                     # Save new opportunity using repository (includes duplicate prevention)
-                    await opp_repo.save_opportunity(opp)
-                    saved_opportunities.append(opp)
+                    db_opportunity = await opp_repo.save_opportunity(opp)
+                    saved_opportunities.append((opp, db_opportunity.id))
                     new_opportunities += 1
 
                 except Exception as e:

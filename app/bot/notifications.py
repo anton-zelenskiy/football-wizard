@@ -55,12 +55,19 @@ async def send_betting_opportunity(
                     )
 
                     # Log the notification using our repository
-                    await repo.log_notification(
-                        user=user,
-                        opportunity_id=opportunity_id,
-                        message=message_text,
-                        success=True,
-                    )
+                    try:
+                        await repo.log_notification(
+                            user=user,
+                            opportunity_id=opportunity_id,
+                            message=message_text,
+                            success=True,
+                        )
+                    except Exception as log_error:
+                        logger.error(
+                            f'Error logging notification: {log_error}',
+                            user_id=user.telegram_id,
+                            opportunity_id=opportunity_id,
+                        )
 
                     # Add delay to avoid rate limiting
                     await asyncio.sleep(0.1)
@@ -72,13 +79,20 @@ async def send_betting_opportunity(
                     )
 
                     # Log the failed notification using our repository
-                    await repo.log_notification(
-                        user=user,
-                        opportunity_id=opportunity_id,
-                        message=message_text,
-                        success=False,
-                        error_message=str(e),
-                    )
+                    try:
+                        await repo.log_notification(
+                            user=user,
+                            opportunity_id=opportunity_id,
+                            message=message_text,
+                            success=False,
+                            error_message=str(e),
+                        )
+                    except Exception as log_error:
+                        logger.error(
+                            f'Error logging notification: {log_error}',
+                            user_id=user.telegram_id,
+                            opportunity_id=opportunity_id,
+                        )
 
             logger.info(f'Sent live betting opportunity to {len(users)} users')
 

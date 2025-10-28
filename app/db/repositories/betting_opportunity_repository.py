@@ -54,7 +54,7 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                 and_(
                     BettingOpportunity.match_id == match_id,
                     BettingOpportunity.rule_slug == rule_slug,
-                    BettingOpportunity.outcome.is_(None),
+                    BettingOpportunity.outcome == BetOutcome.UNKNOWN.value,
                 )
             )
         )
@@ -71,7 +71,7 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                 and_(
                     BettingOpportunity.match_id == opportunity.match_id,
                     BettingOpportunity.rule_slug == opportunity.slug,
-                    BettingOpportunity.outcome.is_(None),
+                    BettingOpportunity.outcome == BetOutcome.UNKNOWN.value,
                 )
             )
         )
@@ -98,7 +98,7 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
             rule_slug=opportunity.slug,
             confidence_score=opportunity.confidence,
             details=json.dumps(details),
-            outcome=None,
+            outcome=BetOutcome.UNKNOWN.value,
             created_at=datetime.now(),
         )
         self.session.add(record)
@@ -120,7 +120,12 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                 selectinload(BettingOpportunity.match).selectinload(Match.league),
             )
             .join(Match, BettingOpportunity.match_id == Match.id)
-            .where(and_(BettingOpportunity.outcome.is_(None), Match.match_date > now))
+            .where(
+                and_(
+                    BettingOpportunity.outcome == BetOutcome.UNKNOWN.value,
+                    Match.match_date > now,
+                )
+            )
             .order_by(BettingOpportunity.confidence_score.desc())
         )
         return result.scalars().all()
@@ -139,7 +144,10 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
             )
             .join(Match, BettingOpportunity.match_id == Match.id)
             .where(
-                and_(BettingOpportunity.outcome.is_not(None), Match.match_date <= now)
+                and_(
+                    BettingOpportunity.outcome != BetOutcome.UNKNOWN.value,
+                    Match.match_date <= now,
+                )
             )
             .order_by(Match.match_date.desc())
             .limit(limit)
@@ -162,7 +170,7 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                         else_=0,
                     )
                 ),
-            ).where(BettingOpportunity.outcome.is_not(None))
+            ).where(BettingOpportunity.outcome != BetOutcome.UNKNOWN.value)
         )
         total, wins, losses = result.one()
         total = int(total or 0)
@@ -233,7 +241,7 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
             .join(Match, BettingOpportunity.match_id == Match.id)
             .where(
                 and_(
-                    BettingOpportunity.outcome.is_(None),
+                    BettingOpportunity.outcome == BetOutcome.UNKNOWN.value,
                     Match.status == 'finished',
                     Match.home_score.is_not(None),
                     Match.away_score.is_not(None),
