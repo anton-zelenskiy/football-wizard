@@ -3,7 +3,7 @@ from typing import Any
 
 import structlog
 
-from app.bet_rules.structures import Bet
+from app.bet_rules.bet_rules import Bet
 from app.db.repositories.telegram_user_repository import TelegramUserRepository
 from app.db.session import get_async_db_session
 

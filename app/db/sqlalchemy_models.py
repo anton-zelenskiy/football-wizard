@@ -16,7 +16,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 import structlog
 
-from app.bet_rules.structures import BetOutcome
+from app.bet_rules.bet_rules import Bet
+from app.bet_rules.bet_rules import BettingOpportunity as BettingOpportunityDomain
+from app.bet_rules.structures import BetOutcome, MatchData, MatchSummary
 
 
 logger = structlog.get_logger()
@@ -122,8 +124,6 @@ class Match(Base):
 
     def to_pydantic(self):
         """Convert SQLAlchemy Match model to Pydantic MatchData"""
-        from app.bet_rules.team_analysis import MatchData
-
         return MatchData(
             id=self.id,
             home_team_id=self.home_team_id,
@@ -170,13 +170,11 @@ class BettingOpportunity(Base):
 
     def to_domain(self):
         """Convert BettingOpportunity database model to Bet domain model"""
-        from app.bet_rules.structures import Bet, BettingOpportunity, MatchSummary
-
         details = self.get_details()
 
         match_summary = MatchSummary.from_match(self.match)
 
-        opportunity = BettingOpportunity(
+        opportunity = BettingOpportunityDomain(
             slug=self.rule_slug,
             confidence=self.confidence_score,
             team_analyzed=details.get('team_analyzed', 'Unknown'),

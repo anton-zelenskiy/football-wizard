@@ -1,22 +1,10 @@
-#!/usr/bin/env python3
-"""
-Unit tests for TeamAnalysis and TeamAnalysisService classes
-"""
-
 import pytest
 
-from app.bet_rules.team_analysis import (
+from app.bet_rules.structures import (
     MatchData,
     TeamAnalysis,
-    TeamAnalysisService,
     TeamData,
 )
-
-
-@pytest.fixture
-def team_analysis_service():
-    """Create a TeamAnalysisService instance for testing"""
-    return TeamAnalysisService(top_teams_count=8, min_consecutive_losses=3)
 
 
 @pytest.fixture
@@ -74,13 +62,7 @@ def create_team_analysis_from_dict(team: TeamData, analysis_dict):
     )
 
 
-def test_team_analysis_service_init(team_analysis_service):
-    """Test TeamAnalysisService initialization"""
-    assert team_analysis_service.top_teams_count == 8
-    assert team_analysis_service.min_consecutive_losses == 3
-
-
-def test_analyze_team_performance(team_analysis_service, mock_teams):
+def test_analyze_team_performance(mock_teams):
     """Test team performance analysis"""
     home_team, _ = mock_teams
 
@@ -99,8 +81,8 @@ def test_analyze_team_performance(team_analysis_service, mock_teams):
 
         mock_matches.append(match)
 
-    # Use the team analysis service directly
-    analysis = team_analysis_service.analyze_team_performance(home_team, mock_matches)
+    # Use the TeamAnalysis classmethod directly
+    analysis = TeamAnalysis.analyze_team_performance(home_team, mock_matches)
 
     # Test basic fields
     assert hasattr(analysis, 'consecutive_wins')
@@ -129,7 +111,7 @@ def test_analyze_team_performance(team_analysis_service, mock_teams):
     assert analysis.loss_rate == 0.2
 
 
-def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
+def test_calculate_consecutive_streak(mock_teams):
     """Test consecutive streak calculation"""
     home_team, _ = mock_teams
 
@@ -149,7 +131,7 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
         win_matches.append(match)
 
     # Consecutive wins should be 3 from the beginning (most recent)
-    consecutive_wins = team_analysis_service._calculate_consecutive_streak(
+    consecutive_wins = TeamAnalysis._calculate_consecutive_streak(
         win_matches, home_team, 'win'
     )
     assert consecutive_wins == 3
@@ -169,7 +151,7 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
         no_goals_matches.append(match)
 
     # Consecutive no-goals should be 2 from the beginning (most recent)
-    consecutive_no_goals = team_analysis_service._calculate_consecutive_streak(
+    consecutive_no_goals = TeamAnalysis._calculate_consecutive_streak(
         no_goals_matches, home_team, 'no_goals'
     )
     assert consecutive_no_goals == 2
@@ -190,7 +172,7 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
         mixed_matches.append(match)
 
     # Consecutive draws should be 0 since most recent match is not a draw
-    consecutive_draws = team_analysis_service._calculate_consecutive_streak(
+    consecutive_draws = TeamAnalysis._calculate_consecutive_streak(
         mixed_matches, home_team, 'draw'
     )
     assert consecutive_draws == 0
@@ -198,30 +180,30 @@ def test_calculate_consecutive_streak(team_analysis_service, mock_teams):
     # Consecutive no-goals should be 2 from the beginning (most recent)
     # Pattern: [no-goals(0,1), no-goals(0,2), goals(1,0), win(2,0), loss(0,1)]
     # So from the beginning: no-goals, no-goals = 2 no-goals
-    consecutive_no_goals = team_analysis_service._calculate_consecutive_streak(
+    consecutive_no_goals = TeamAnalysis._calculate_consecutive_streak(
         mixed_matches, home_team, 'no_goals'
     )
     assert consecutive_no_goals == 2
 
     # Consecutive wins should be 0 since most recent match is not a win
-    consecutive_wins = team_analysis_service._calculate_consecutive_streak(
+    consecutive_wins = TeamAnalysis._calculate_consecutive_streak(
         mixed_matches, home_team, 'win'
     )
     assert consecutive_wins == 0
 
     # Consecutive losses should be 2 since most recent matches are losses
-    consecutive_losses = team_analysis_service._calculate_consecutive_streak(
+    consecutive_losses = TeamAnalysis._calculate_consecutive_streak(
         mixed_matches, home_team, 'loss'
     )
     assert consecutive_losses == 2
 
 
-def test_analyze_team_performance_with_no_matches(team_analysis_service, mock_teams):
+def test_analyze_team_performance_with_no_matches(mock_teams):
     """Test team performance analysis when no recent matches exist"""
     home_team, _ = mock_teams
 
-    # Use the team analysis service directly with empty matches
-    analysis = team_analysis_service.analyze_team_performance(home_team, [])
+    # Use the TeamAnalysis classmethod directly with empty matches
+    analysis = TeamAnalysis.analyze_team_performance(home_team, [])
 
     # Should return default values when no matches exist
     assert analysis.consecutive_wins == 0
@@ -238,15 +220,15 @@ def test_analyze_team_performance_with_no_matches(team_analysis_service, mock_te
     assert analysis.loss_rate == 0
 
 
-def test_analyze_team_performance_with_single_match(team_analysis_service, mock_teams):
+def test_analyze_team_performance_with_single_match(mock_teams):
     """Test team performance analysis with only one recent match"""
     home_team, _ = mock_teams
 
     # Single match - home team wins
     match = create_match_data(home_team.id, 2, 2, 0)
 
-    # Use the team analysis service directly
-    analysis = team_analysis_service.analyze_team_performance(home_team, [match])
+    # Use the TeamAnalysis classmethod directly
+    analysis = TeamAnalysis.analyze_team_performance(home_team, [match])
 
     assert analysis.total_matches == 1
     assert analysis.wins == 1
@@ -262,25 +244,25 @@ def test_analyze_team_performance_with_single_match(team_analysis_service, mock_
     assert analysis.consecutive_goals == 1
 
 
-def test_team_won_lost_drew(team_analysis_service, mock_teams):
+def test_team_won_lost_drew(mock_teams):
     """Test team result checking methods"""
     home_team, away_team = mock_teams
 
     # Test team won
     match = create_match_data(home_team.id, away_team.id, 2, 1)
 
-    assert team_analysis_service._team_won(match, home_team) is True
-    assert team_analysis_service._team_won(match, away_team) is False
-    assert team_analysis_service._team_lost(match, home_team) is False
-    assert team_analysis_service._team_lost(match, away_team) is True
-    assert team_analysis_service._team_drew(match, home_team) is False
+    assert TeamAnalysis._team_won(match, home_team) is True
+    assert TeamAnalysis._team_won(match, away_team) is False
+    assert TeamAnalysis._team_lost(match, home_team) is False
+    assert TeamAnalysis._team_lost(match, away_team) is True
+    assert TeamAnalysis._team_drew(match, home_team) is False
 
     # Test draw
     match = create_match_data(home_team.id, away_team.id, 1, 1)
-    assert team_analysis_service._team_drew(match, home_team) is True
+    assert TeamAnalysis._team_drew(match, home_team) is True
 
 
-def test_team_no_goals(team_analysis_service, mock_teams):
+def test_team_no_goals(mock_teams):
     """Test team no goals checking"""
     home_team, away_team = mock_teams
 
@@ -288,23 +270,23 @@ def test_team_no_goals(team_analysis_service, mock_teams):
     match = create_match_data(home_team.id, away_team.id, 0, 2)
 
     # The home team scored 0 goals, so _team_no_goals should return True
-    assert team_analysis_service._team_no_goals(match, home_team) is True
-    assert team_analysis_service._team_no_goals(match, away_team) is False
+    assert TeamAnalysis._team_no_goals(match, home_team) is True
+    assert TeamAnalysis._team_no_goals(match, away_team) is False
 
     # Test away team scored no goals
     match = create_match_data(home_team.id, away_team.id, 2, 0)
 
-    assert team_analysis_service._team_no_goals(match, home_team) is False
-    assert team_analysis_service._team_no_goals(match, away_team) is True
+    assert TeamAnalysis._team_no_goals(match, home_team) is False
+    assert TeamAnalysis._team_no_goals(match, away_team) is True
 
     # Test both teams scored goals
     match = create_match_data(home_team.id, away_team.id, 1, 1)
 
-    assert team_analysis_service._team_no_goals(match, home_team) is False
-    assert team_analysis_service._team_no_goals(match, away_team) is False
+    assert TeamAnalysis._team_no_goals(match, home_team) is False
+    assert TeamAnalysis._team_no_goals(match, away_team) is False
 
 
-def test_team_result_methods_with_none_scores(team_analysis_service, mock_teams):
+def test_team_result_methods_with_none_scores(mock_teams):
     """Test team result methods with None scores"""
     home_team, away_team = mock_teams
 
@@ -318,15 +300,13 @@ def test_team_result_methods_with_none_scores(team_analysis_service, mock_teams)
     )
 
     # All methods should return False when scores are None
-    assert team_analysis_service._team_won(match, home_team) is False
-    assert team_analysis_service._team_lost(match, home_team) is False
-    assert team_analysis_service._team_drew(match, home_team) is False
-    assert team_analysis_service._team_no_goals(match, home_team) is False
+    assert TeamAnalysis._team_won(match, home_team) is False
+    assert TeamAnalysis._team_lost(match, home_team) is False
+    assert TeamAnalysis._team_drew(match, home_team) is False
+    assert TeamAnalysis._team_no_goals(match, home_team) is False
 
 
-def test_team_result_methods_with_partial_none_scores(
-    team_analysis_service, mock_teams
-):
+def test_team_result_methods_with_partial_none_scores(mock_teams):
     """Test team result methods with partial None scores"""
     home_team, away_team = mock_teams
 
@@ -340,10 +320,10 @@ def test_team_result_methods_with_partial_none_scores(
     )
 
     # All methods should return False when one score is None
-    assert team_analysis_service._team_won(match, home_team) is False
-    assert team_analysis_service._team_lost(match, home_team) is False
-    assert team_analysis_service._team_drew(match, home_team) is False
-    assert team_analysis_service._team_no_goals(match, home_team) is False
+    assert TeamAnalysis._team_won(match, home_team) is False
+    assert TeamAnalysis._team_lost(match, home_team) is False
+    assert TeamAnalysis._team_drew(match, home_team) is False
+    assert TeamAnalysis._team_no_goals(match, home_team) is False
 
 
 @pytest.mark.parametrize(
@@ -357,9 +337,11 @@ def test_team_result_methods_with_partial_none_scores(
         (15, False),  # Rank 15 should NOT be top team
     ],
 )
-def test_top_team_classification(team_analysis_service, rank, expected_is_top):
+def test_top_team_classification(rank, expected_is_top):
     """Test that team rank classification works correctly with top_teams_count=8"""
-    is_top_team = rank <= team_analysis_service.top_teams_count
+    team = TeamData(id=1, name='Test Team', rank=rank)
+    analysis = TeamAnalysis(team=team, rank=rank)
+    is_top_team = analysis.is_top_team
     assert (
         is_top_team == expected_is_top
     ), f'Rank {rank} should {"be" if expected_is_top else "NOT be"} a top team'

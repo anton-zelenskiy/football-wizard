@@ -1,16 +1,18 @@
 import structlog
 
-from app.bet_rules.structures import (
+from app.bet_rules.bet_rules import (
     Bet,
     BettingRule,
     ConsecutiveDrawsRule,
     ConsecutiveLossesRule,
-    MatchSummary,
     Top5ConsecutiveLossesRule,
+)
+from app.bet_rules.structures import (
+    MatchSummary,
 )
 from app.settings import settings
 
-from .team_analysis import TeamAnalysisService
+from .structures import TeamAnalysis
 
 
 logger = structlog.get_logger()
@@ -22,9 +24,6 @@ class BettingRulesEngine:
     def __init__(self, rounds_back: int = 5) -> None:
         self.top_teams_count = settings.top_teams_count
         self.rounds_back = rounds_back
-        self.team_analysis_service = TeamAnalysisService(
-            top_teams_count=self.top_teams_count, min_consecutive_losses=3
-        )
 
         self.rules: list[BettingRule] = [
             ConsecutiveLossesRule(),
@@ -66,10 +65,10 @@ class BettingRulesEngine:
         )
 
         # Analyze both teams using the provided team data and recent matches
-        home_analysis = self.team_analysis_service.analyze_team_performance(
+        home_analysis = TeamAnalysis.analyze_team_performance(
             match.home_team_data, match.home_recent_matches
         )
-        away_analysis = self.team_analysis_service.analyze_team_performance(
+        away_analysis = TeamAnalysis.analyze_team_performance(
             match.away_team_data, match.away_recent_matches
         )
 

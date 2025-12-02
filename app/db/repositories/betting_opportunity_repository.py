@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 import structlog
 
-from app.bet_rules.structures import Bet, BetOutcome, LeagueData, MatchSummary
-from app.bet_rules.team_analysis import TeamData
+from app.bet_rules.bet_rules import Bet
+from app.bet_rules.structures import BetOutcome, LeagueData, MatchSummary, TeamData
 from app.db.sqlalchemy_models import BettingOpportunity, Match
 
 from .base_repository import BaseRepository

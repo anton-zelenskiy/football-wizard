@@ -1,12 +1,13 @@
 import pytest
 
+from app.bet_rules.bet_rules import LiveMatchDrawRedCardRule
 from app.bet_rules.structures import (
     BetOutcome,
     BetType,
-    LiveMatchDrawRedCardRule,
     MatchSummary,
+    TeamAnalysis,
+    TeamData,
 )
-from app.bet_rules.team_analysis import TeamAnalysis, TeamData
 
 
 def test_live_match_red_card_rule_creation():

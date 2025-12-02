@@ -1,7 +1,8 @@
 import structlog
 
+from app.bet_rules.bet_rules import Bet
 from app.bet_rules.rule_engine import BettingRulesEngine
-from app.bet_rules.structures import Bet, MatchSummary
+from app.bet_rules.structures import MatchSummary
 from app.bot.notifications import (
     send_betting_opportunity,
     send_coach_change_notification,

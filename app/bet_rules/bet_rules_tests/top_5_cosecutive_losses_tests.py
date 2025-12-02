@@ -1,12 +1,13 @@
 import pytest
 
+from app.bet_rules.bet_rules import Top5ConsecutiveLossesRule
 from app.bet_rules.structures import (
     BetOutcome,
     BetType,
     MatchSummary,
-    Top5ConsecutiveLossesRule,
+    TeamAnalysis,
+    TeamData,
 )
-from app.bet_rules.team_analysis import TeamAnalysis, TeamData
 
 
 def create_team_analysis(
