@@ -5,7 +5,6 @@ from app.bet_rules.structures import (
     BettingRule,
     ConsecutiveDrawsRule,
     ConsecutiveLossesRule,
-    LiveMatchDrawRedCardRule,
     MatchSummary,
     Top5ConsecutiveLossesRule,
 )
@@ -31,7 +30,7 @@ class BettingRulesEngine:
             ConsecutiveLossesRule(),
             ConsecutiveDrawsRule(),
             Top5ConsecutiveLossesRule(),
-            LiveMatchDrawRedCardRule(),
+            # LiveMatchDrawRedCardRule(),
         ]
 
     def get_rule_by_slug(self, slug: str) -> BettingRule | None:

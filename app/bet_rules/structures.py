@@ -179,10 +179,15 @@ class ConsecutiveLossesRule(BettingRule):
         self,
         team_analysis: TeamAnalysis,
         opponent_analysis: TeamAnalysis,
-        match_summary: 'MatchSummary' = None,
+        match_summary: 'MatchSummary',
     ) -> float:
         """Calculate confidence for consecutive losses rule"""
         if team_analysis.consecutive_losses < 3:
+            return 0.0
+
+        # Exclude teams in bottom 2 positions of the league
+        bottom_2_teams = match_summary.league.teams_count - 1  # For 20 teams: 19, 20
+        if team_analysis.team.rank >= bottom_2_teams:
             return 0.0
 
         confidence = self._calculate_base_confidence(team_analysis)
@@ -430,6 +435,14 @@ class LiveMatchDrawRedCardRule(BettingRule):
             return BetOutcome.LOSE
 
 
+class LeagueData(BaseModel):
+    """Pydantic model for league data in analysis"""
+
+    id: int
+    name: str
+    teams_count: int
+
+
 class MatchSummary(BaseModel):
     """Comprehensive match information for betting contexts and outcome determination"""
 
@@ -440,7 +453,7 @@ class MatchSummary(BaseModel):
     away_team_data: 'TeamData' = Field(
         default=None, description='Away team data for analysis'
     )
-    league: str = Field(description='League name')
+    league: 'LeagueData' = Field(description='League data including teams count')
     country: str = Field(description='Country name')
     match_date: str | None = Field(default=None, description='Match date and time')
     home_score: int | None = Field(default=None, description='Home team score')
@@ -489,6 +502,9 @@ class MatchSummary(BaseModel):
     @classmethod
     def from_match(cls, match) -> 'MatchSummary':
         """Create MatchSummary from Match database model"""
+        # Calculate teams count from league relationship
+        teams_count = len(match.league.teams) if match.league.teams else 0
+
         return cls(
             match_id=match.id,
             home_team_data=TeamData(
@@ -501,7 +517,11 @@ class MatchSummary(BaseModel):
                 name=match.away_team.name,
                 rank=match.away_team.rank,
             ),
-            league=match.league.name,
+            league=LeagueData(
+                id=match.league.id,
+                name=match.league.name,
+                teams_count=teams_count,
+            ),
             country=match.league.country,
             match_date=(
                 match.match_date.strftime('%Y-%m-%d %H:%M')
@@ -576,7 +596,7 @@ class Bet(BaseModel):
 
     @property
     def league(self) -> str:
-        return self.match.league
+        return self.match.league.name
 
     @property
     def country(self) -> str:

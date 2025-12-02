@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 import structlog
 
-from app.bet_rules.structures import Bet, BetOutcome, MatchSummary
+from app.bet_rules.structures import Bet, BetOutcome, LeagueData, MatchSummary
 from app.bet_rules.team_analysis import TeamData
 from app.db.sqlalchemy_models import BettingOpportunity, Match
 
@@ -194,6 +194,9 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
             return None
 
         # Build MatchSummary compatible with rules
+        # Calculate teams count from league relationship
+        teams_count = len(match.league.teams) if match.league.teams else 0
+
         match_summary = MatchSummary(
             match_id=match.id,
             home_team_data=TeamData(
@@ -206,7 +209,11 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                 name=match.away_team.name,
                 rank=match.away_team.rank,
             ),
-            league=match.league.name,
+            league=LeagueData(
+                id=match.league.id,
+                name=match.league.name,
+                teams_count=teams_count,
+            ),
             country=match.league.country,
             match_date=match.match_date.strftime('%Y-%m-%d %H:%M')
             if match.match_date
