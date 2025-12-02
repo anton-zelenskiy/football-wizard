@@ -23,6 +23,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.blocked_until: dict[str, float] = {}  # {ip: unblock_timestamp}
 
     async def dispatch(self, request: Request, call_next):
+        # Skip security checks for Telegram webhook endpoint
+        if request.url.path == '/football/api/v1/bot/webhook':
+            return await call_next(request)
+
         # Check if IP is blocked
         client_ip = self._get_client_ip(request)
         current_time = time.time()

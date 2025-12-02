@@ -201,6 +201,60 @@ def _format_daily_summary(opportunities: list[Bet]) -> str:
     return message
 
 
+async def send_coach_change_notification(coach_change: dict[str, str]) -> None:
+    """Send coach change notification to all active users"""
+    async with get_async_db_session() as session:
+        try:
+            # Get all active users
+            repo = TelegramUserRepository(session)
+            users = await repo.get_all_active_users()
+            bot = get_bot_instance()
+
+            message_text = _format_coach_change_message(coach_change)
+
+            for user in users:
+                try:
+                    await bot.send_message(
+                        user.telegram_id, message_text, parse_mode='HTML'
+                    )
+
+                    # Add delay to avoid rate limiting
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    logger.error(
+                        f'Failed to send coach change notification to user {user.telegram_id}',
+                        error=str(e),
+                    )
+
+            logger.info(
+                f'Sent coach change notification to {len(users)} users: '
+                f'{coach_change["team_name"]} - {coach_change["old_coach"]} -> {coach_change["new_coach"]}'
+            )
+
+        except Exception as e:
+            logger.error('Error sending coach change notifications', error=str(e))
+
+
+def _format_coach_change_message(coach_change: dict[str, str]) -> str:
+    """Format coach change notification message"""
+    team_name = coach_change['team_name']
+    league_name = coach_change['league_name']
+    country = coach_change['country']
+    old_coach = coach_change['old_coach'] or 'Unknown'
+    new_coach = coach_change['new_coach'] or 'Unknown'
+
+    message = (
+        f'👔 <b>Coach Change Notification</b>\n\n'
+        f'⚽ <b>Team:</b> {team_name}\n'
+        f'🏟️ <b>League:</b> {league_name} ({country})\n\n'
+        f'👤 <b>Old Coach:</b> {old_coach}\n'
+        f'👤 <b>New Coach:</b> {new_coach}\n'
+    )
+
+    return message
+
+
 def format_opportunities_message(opportunities: list[Bet]) -> str:
     """Format betting opportunities message for display"""
     if not opportunities:

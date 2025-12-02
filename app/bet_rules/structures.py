@@ -617,34 +617,3 @@ class Bet(BaseModel):
     @property
     def opportunity_type(self) -> OpportunityType:
         return self.opportunity.opportunity_type
-
-    @classmethod
-    def from_legacy_data(
-        cls,
-        match_id: int | None,
-        home_team: str,
-        away_team: str,
-        league: str,
-        country: str,
-        match_date: str | None,
-        slug: str,
-        confidence: float,
-        team_analyzed: str,
-        details: dict[str, Any],
-    ) -> 'Bet':
-        """Create Bet from legacy flat structure for backward compatibility"""
-        match = MatchSummary(
-            match_id=match_id,
-            home_team=home_team,
-            away_team=away_team,
-            league=league,
-            country=country,
-            match_date=match_date,
-        )
-        opportunity = BettingOpportunity(
-            slug=slug,
-            confidence=confidence,
-            team_analyzed=team_analyzed,
-            details=details,
-        )
-        return cls(match=match, opportunity=opportunity)

@@ -2,7 +2,11 @@ import structlog
 
 from app.bet_rules.rule_engine import BettingRulesEngine
 from app.bet_rules.structures import Bet, MatchSummary
-from app.bot.notifications import send_betting_opportunity, send_daily_summary
+from app.bot.notifications import (
+    send_betting_opportunity,
+    send_coach_change_notification,
+    send_daily_summary,
+)
 from app.db.repositories.betting_opportunity_repository import (
     BettingOpportunityRepository,
 )
@@ -195,6 +199,7 @@ class BettingTasks:
             total_standings = 0
             total_matches = 0
             total_fixtures = 0
+            all_coach_changes = []
 
             # Get monitored leagues from a temporary scraper instance (just for config)
             temp_scraper = LivesportScraper()
@@ -217,17 +222,33 @@ class BettingTasks:
                         total_standings += league_stats['standings_count']
                         total_matches += league_stats['matches_count']
                         total_fixtures += league_stats['fixtures_count']
+                        all_coach_changes.extend(league_stats['coach_changes'])
 
                         logger.info(
                             f'Completed {country}: {league_name} - '
                             f'Standings: {league_stats["standings_count"]}, '
                             f'Matches: {league_stats["matches_count"]}, '
-                            f'Fixtures: {league_stats["fixtures_count"]}'
+                            f'Fixtures: {league_stats["fixtures_count"]}, '
+                            f'Coach changes: {len(league_stats["coach_changes"])}'
                         )
 
                     except Exception as e:
                         logger.error(f'Error processing {country}: {league_name}: {e}')
                         continue
+
+            # Send coach change notifications
+            if all_coach_changes:
+                logger.info(
+                    f'Found {len(all_coach_changes)} coach changes, sending notifications'
+                )
+                for coach_change in all_coach_changes:
+                    try:
+                        await send_coach_change_notification(coach_change)
+                    except Exception as e:
+                        logger.error(
+                            f'Error sending coach change notification: {e}',
+                            coach_change=coach_change,
+                        )
 
             # Update betting outcomes for finished matches using repository
             async with get_async_db_session() as session:
@@ -238,7 +259,8 @@ class BettingTasks:
             logger.info('League data refresh completed successfully')
             return (
                 f'Refreshed data for {total_leagues} leagues: '
-                f'{total_standings} standings, {total_matches} matches, {total_fixtures} fixtures'
+                f'{total_standings} standings, {total_matches} matches, {total_fixtures} fixtures, '
+                f'{len(all_coach_changes)} coach changes'
             )
 
         except Exception as e:
@@ -247,9 +269,14 @@ class BettingTasks:
 
     async def _process_single_league(
         self, scraper: LivesportScraper, country: str, league_name: str
-    ) -> dict[str, int]:
+    ) -> dict[str, int | list]:
         """Process a single league: scrape and save all data iteratively"""
-        stats = {'standings_count': 0, 'matches_count': 0, 'fixtures_count': 0}
+        stats = {
+            'standings_count': 0,
+            'matches_count': 0,
+            'fixtures_count': 0,
+            'coach_changes': [],
+        }
 
         # Save league first using repository
         async with get_async_db_session() as session:
@@ -264,7 +291,11 @@ class BettingTasks:
                 async with get_async_db_session() as session:
                     team_repo = TeamRepository(session)
                     for team in standings:
-                        await team_repo.save_team_standings(team, league_name, country)
+                        _, coach_change = await team_repo.save_team_standings(
+                            team, league_name, country
+                        )
+                        if coach_change:
+                            stats['coach_changes'].append(coach_change)
                 stats['standings_count'] = len(standings)
                 logger.debug(
                     f'Saved {len(standings)} team standings for {country} - {league_name}'

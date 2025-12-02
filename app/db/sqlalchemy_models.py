@@ -63,6 +63,7 @@ class Team(Base):
     goals_scored = Column(Integer, default=0)
     goals_conceded = Column(Integer, default=0)
     points = Column(Integer, default=0)
+    coach = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

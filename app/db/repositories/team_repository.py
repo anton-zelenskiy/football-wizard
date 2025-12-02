@@ -51,11 +51,12 @@ class TeamRepository(BaseRepository[Team]):
 
     async def save_team_standings(
         self, team_data: dict[str, Any], league_name: str, country: str
-    ) -> Team | None:
+    ) -> tuple[Team | None, dict[str, Any] | None]:
         """Save team standings/statistics.
 
         Mirrors the semantics of Peewee-based save_team_standings in storage.
-        Returns None if league not found or team data invalid.
+        Returns tuple of (Team | None, coach_change_info | None).
+        coach_change_info contains: team_name, league_name, country, old_coach, new_coach
         """
         # Normalize country name to prevent duplicates
         normalized_country = normalize_country_name(country)
@@ -66,18 +67,38 @@ class TeamRepository(BaseRepository[Team]):
         )
         if not league:
             logger.error(f'League not found: {normalized_country} - {league_name}')
-            return None
+            return None, None
 
         # Extract team name
         team_name = team_data.get('team', {}).get('name', '')
         if not team_name:
             logger.error(f'Team not found: {team_data}')
-            return None
+            return None, None
 
         # Check if team exists
         existing_team = await self.get_by_name_and_league(team_name, league.id)
 
+        coach_change_info = None
+
         if existing_team:
+            # Check for coach change
+            old_coach = existing_team.coach
+            new_coach = team_data.get('coach')
+
+            if old_coach != new_coach and (
+                old_coach is not None or new_coach is not None
+            ):
+                coach_change_info = {
+                    'team_name': team_name,
+                    'league_name': league_name,
+                    'country': normalized_country,
+                    'old_coach': old_coach,
+                    'new_coach': new_coach,
+                }
+                logger.info(
+                    f'Coach change detected for {team_name}: {old_coach} -> {new_coach}'
+                )
+
             # Update existing team statistics
             existing_team.rank = team_data.get('rank')
             existing_team.games_played = team_data.get('all', {}).get('played', 0)
@@ -91,12 +112,14 @@ class TeamRepository(BaseRepository[Team]):
                 team_data.get('all', {}).get('goals', {}).get('against', 0)
             )
             existing_team.points = team_data.get('points', 0)
+            if 'coach' in team_data:
+                existing_team.coach = team_data.get('coach')
             existing_team.updated_at = datetime.now()
 
             await self.session.commit()
             await self.session.refresh(existing_team)
             logger.debug(f'Updated team statistics: {existing_team.name}')
-            return existing_team
+            return existing_team, coach_change_info
         else:
             # Create new team
             new_team = Team(
@@ -112,12 +135,13 @@ class TeamRepository(BaseRepository[Team]):
                 .get('goals', {})
                 .get('against', 0),
                 points=team_data.get('points', 0),
+                coach=team_data.get('coach'),
             )
             self.session.add(new_team)
             await self.session.commit()
             await self.session.refresh(new_team)
             logger.info(f'Created new team: {new_team.name}')
-            return new_team
+            return new_team, None
 
     async def get_or_create_team(self, team_name: str, league_id: int) -> Team:
         """Get existing team or create new one."""

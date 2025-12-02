@@ -1,9 +1,12 @@
 from typing import Any
 
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from fastapi import APIRouter, HTTPException, Request, Response, status
+import structlog
 
 from app.bot import bot, dp, get_webhook_url, webhook_secret_token
+
+
+logger = structlog.get_logger()
 
 
 router = APIRouter()
@@ -15,22 +18,25 @@ async def webhook_handler(request: Request):
     Handle Telegram webhook requests
     """
     try:
+        # Validate secret token if configured
+        if webhook_secret_token:
+            secret_token_header = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+            if not secret_token_header or secret_token_header != webhook_secret_token:
+                logger.warning('Invalid or missing secret token in webhook request')
+                return Response(
+                    content='Invalid secret token',
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
         # Get the update from the request body
         update = await request.json()
 
-        # Create a SimpleRequestHandler instance
-        webhook_request_handler = SimpleRequestHandler(
-            dispatcher=dp,
-            bot=bot,
-            secret_token=webhook_secret_token,
-        )
+        # Process the update
+        await dp.feed_webhook_update(bot=bot, update=update)
 
-        # Process the update directly
-        await webhook_request_handler.dispatcher.feed_webhook_update(
-            bot=bot, update=update
-        )
         return Response(status_code=status.HTTP_200_OK)
     except Exception as e:
+        logger.error(f'Failed to process webhook update: {str(e)}', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Failed to process webhook update: {str(e)}',
@@ -75,7 +81,7 @@ async def set_webhook() -> Any:
         )
 
 
-@router.post(
+@router.get(
     '/delete-webhook', status_code=status.HTTP_200_OK, response_model=dict[str, Any]
 )
 async def delete_webhook(drop_pending: bool = True) -> Any:

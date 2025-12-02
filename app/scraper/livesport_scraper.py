@@ -64,6 +64,7 @@ class LivesportScraper:
         }
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
+        self._cookie_banner_closed: bool = False
 
     async def __aenter__(self) -> 'LivesportScraper':
         """Async context manager entry"""
@@ -112,11 +113,15 @@ class LivesportScraper:
 
     async def _handle_cookie_banner(self, page: Page) -> None:
         """Handle cookie banner if present"""
+        if self._cookie_banner_closed:
+            return
+
         try:
-            await page.wait_for_selector('button:has-text("I Accept")', timeout=5000)
+            await page.wait_for_selector('button:has-text("I Accept")', timeout=3000)
             cookie_button = await page.query_selector('button:has-text("I Accept")')
             if cookie_button:
                 await cookie_button.click()
+                self._cookie_banner_closed = True
                 logger.info('Closed cookie banner')
         except Exception as e:
             logger.info(f'No cookie banner to close: {e}')
@@ -339,14 +344,16 @@ class LivesportScraper:
         try:
             page = await self._setup_page(browser)
 
-            if not await self._navigate_and_wait(page, url, 'a[href*="/team/"]', 60000):
+            if not await self._navigate_and_wait(page, url, '.ui-table__body', 60000):
                 return []
 
             # Use optimized selectors to get table rows directly
             table_rows = await page.query_selector_all('.ui-table__row')
             logger.info(f'Found {len(table_rows)} table rows')
             standings_data = []
+            team_urls = []  # Store team URLs for coach scraping
 
+            # First pass: extract all team data and URLs
             for row in table_rows:
                 try:
                     # Extract team name from the participant cell
@@ -354,11 +361,26 @@ class LivesportScraper:
                     if not team_element:
                         continue
 
+                    # Find the team link element with class "tableCellParticipant__name"
+                    team_link = await team_element.query_selector(
+                        'a.tableCellParticipant__name'
+                    )
+
                     team_name = await team_element.inner_text()
                     team_name = team_name.strip()
 
                     if not team_name or len(team_name) < 2:
                         continue
+
+                    # Extract team URL if link exists
+                    team_url = None
+                    if team_link:
+                        team_link_href = await team_link.get_attribute('href')
+                        if team_link_href:
+                            if team_link_href.startswith('/'):
+                                team_url = f'https://www.livesport.com{team_link_href}'
+                            else:
+                                team_url = team_link_href
 
                     # Extract rank from the rank cell
                     rank_element = await row.query_selector('.table__cell--rank')
@@ -430,14 +452,38 @@ class LivesportScraper:
                             'goals': {'for': goals_for, 'against': goals_against},
                         },
                         'points': points,
+                        'coach': None,  # Will be filled in second pass
                     }
 
                     standings_data.append(team_data)
+                    team_urls.append(team_url)  # Store URL for coach scraping
                     logger.debug(f'Extracted team: {team_name} (rank {rank})')
 
                 except Exception as e:
                     logger.error(f'Error parsing standings row: {e}')
+                    standings_data.append(None)  # Placeholder for failed row
+                    team_urls.append(None)
                     continue
+
+            # Second pass: scrape coaches for each team
+            for team_data, team_url in zip(standings_data, team_urls, strict=True):
+                if team_data is None or team_url is None:
+                    continue
+
+                try:
+                    coach = await self._scrape_team_coach_by_url(page, team_url)
+                    if coach:
+                        team_data['coach'] = coach
+                        logger.debug(
+                            f'Scraped coach for {team_data["team"]["name"]}: {coach}'
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f'Error scraping coach for {team_data["team"]["name"]}: {e}'
+                    )
+
+            # Filter out None entries
+            standings_data = [data for data in standings_data if data is not None]
 
             logger.info(f'Scraped {len(standings_data)} teams from {league_name}')
             return standings_data
@@ -445,6 +491,70 @@ class LivesportScraper:
         except Exception as e:
             logger.error(f'Unexpected error while scraping standings: {e}')
             return []
+
+    async def _scrape_team_coach_by_url(self, page: Page, team_url: str) -> str | None:
+        """Scrape coach name from team page using URL"""
+        try:
+            logger.debug(f'Navigating to team page: {team_url}')
+
+            # Navigate to team page
+            if not await self._navigate_and_wait(page, team_url, '.tabs__tab', 30000):
+                logger.warning(f'Failed to load team page: {team_url}')
+                return None
+
+            # Click on Squad tab
+            try:
+                squad_tab = await page.query_selector('a.tabs__tab[title="Squad"]')
+                if not squad_tab:
+                    logger.warning('Squad tab not found on team page')
+                    return None
+
+                await squad_tab.click()
+                logger.debug('Clicked Squad tab')
+                await page.wait_for_timeout(3000)  # Wait for content to load
+
+            except Exception as e:
+                logger.warning(f'Error clicking Squad tab: {e}')
+                return None
+
+            # Find all lineupTable elements
+            lineup_tables = await page.query_selector_all(
+                '.lineupTable.lineupTable--soccer'
+            )
+
+            coach_name = None
+            # Find the table with title "Coach"
+            for table in lineup_tables:
+                try:
+                    title_element = await table.query_selector('.lineupTable__title')
+                    if not title_element:
+                        continue
+
+                    title_text = await title_element.inner_text()
+                    if title_text and title_text.strip() == 'Coach':
+                        # Found the coach table, now extract coach name
+                        coach_link = await table.query_selector(
+                            'a.lineupTable__cell--name'
+                        )
+                        if coach_link:
+                            coach_name = await coach_link.inner_text()
+                            if coach_name:
+                                logger.debug(f'Found coach: {coach_name}')
+                                coach_name = coach_name.strip()
+                                break
+                except Exception as e:
+                    logger.debug(f'Error checking lineup table: {e}')
+                    continue
+
+            if not coach_name:
+                logger.warning('Coach table not found on squad page')
+                return None
+
+            return coach_name
+
+        except Exception as e:
+            logger.error(f'Error scraping team coach: {e}')
+            return None
 
     async def scrape_league_matches(
         self, country: str, league_name: str
@@ -464,7 +574,7 @@ class LivesportScraper:
             page = await self._setup_page(browser)
 
             if not await self._navigate_and_wait(
-                page, url, 'a[href*="/game/soccer/"]', 60000
+                page, url, '.event__round--static', 60000
             ):
                 return []
 
