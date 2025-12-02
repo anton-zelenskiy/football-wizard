@@ -191,7 +191,7 @@ class BettingTasks:
         )
         return saved_opportunities
 
-    async def refresh_league_data_task(self, ctx) -> str:
+    async def refresh_league_data_task(self, ctx, season: int = None) -> str:
         """Refresh league standings and team statistics iteratively"""
         logger.info('Starting league data refresh task')
 
@@ -216,7 +216,7 @@ class BettingTasks:
                         async with LivesportScraper() as scraper:
                             # Scrape and save league data iteratively
                             league_stats = await self._process_single_league(
-                                scraper, country, league_name
+                                scraper, country, league_name, season
                             )
 
                         total_leagues += 1
@@ -269,7 +269,11 @@ class BettingTasks:
             raise
 
     async def _process_single_league(
-        self, scraper: LivesportScraper, country: str, league_name: str
+        self,
+        scraper: LivesportScraper,
+        country: str,
+        league_name: str,
+        season: int = None,
     ) -> dict[str, int | list]:
         """Process a single league: scrape and save all data iteratively"""
         stats = {
@@ -286,7 +290,9 @@ class BettingTasks:
 
         # Scrape and save standings iteratively
         try:
-            standings = await scraper.scrape_league_standings(country, league_name)
+            standings = await scraper.scrape_league_standings(
+                country, league_name, season
+            )
             if standings:
                 # Save/update teams via repository
                 async with get_async_db_session() as session:
@@ -306,7 +312,7 @@ class BettingTasks:
 
         # Scrape and save matches iteratively
         try:
-            matches = await scraper.scrape_league_matches(country, league_name)
+            matches = await scraper.scrape_league_matches(country, league_name, season)
             if matches:
                 # Initialize repository for saving matches
                 async with get_async_db_session() as session:
@@ -322,7 +328,9 @@ class BettingTasks:
 
         # Scrape and save fixtures iteratively
         try:
-            fixtures = await scraper.scrape_league_fixtures(country, league_name)
+            fixtures = await scraper.scrape_league_fixtures(
+                country, league_name, season
+            )
             if fixtures:
                 # Initialize repository for saving fixtures
                 async with get_async_db_session() as session:
@@ -409,4 +417,4 @@ async def live_matches_analysis(ctx) -> None:
 async def refresh_league_data(ctx) -> None:
     """League data refresh task for arq"""
     tasks = BettingTasks()
-    return await tasks.refresh_league_data_task(ctx)
+    return await tasks.refresh_league_data_task(ctx, season=ctx.get('season'))

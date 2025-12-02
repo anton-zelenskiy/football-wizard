@@ -40,6 +40,8 @@ class CommonMatchData(BaseModel):
 class LivesportScraper:
     """Unified scraper for livesport.com with common functionality for live matches and league data"""
 
+    DEFAULT_SEASON = 2025
+
     def __init__(self) -> None:
         self.monitored_leagues = LEAGUES_OF_INTEREST
         self.browser_args = [
@@ -329,15 +331,31 @@ class LivesportScraper:
             return []
 
     async def scrape_league_standings(
-        self, country: str, league_name: str
+        self, country: str, league_name: str, season: int | None = None
     ) -> list[dict[str, Any]]:
-        """Scrape league standings from livesport.com"""
+        """Scrape league standings from livesport.com
+
+        Args:
+            country: Country name (e.g., 'England')
+            league_name: League name (e.g., 'Premier League')
+            season: Optional season year (e.g., 2024). If None, parses season from page.
+                    If provided, constructs URL for archived season (e.g., -2024-2025)
+        """
+        # Track if we're scraping an archived season (season parameter was provided)
+        is_archived_season = season is not None
+
         # Construct URL for the specific league
         country_lower = country.lower().replace(' ', '-')
         league_lower = league_name.lower().replace(' ', '-')
-        url = f'https://www.livesport.com/soccer/{country_lower}/{league_lower}/standings/'
 
-        logger.info(f'Scraping league standings from: {url}')
+        # Add season suffix for archived seasons (e.g., premier-league-2024-2025)
+        if season is not None:
+            season_suffix = f'-{season}-{season + 1}'
+            url = f'https://www.livesport.com/soccer/{country_lower}/{league_lower}{season_suffix}/standings/'
+        else:
+            url = f'https://www.livesport.com/soccer/{country_lower}/{league_lower}/standings/'
+
+        logger.info(f'Scraping league standings from: {url} (season: {season})')
 
         browser = await self._setup_browser()
 
@@ -346,6 +364,13 @@ class LivesportScraper:
 
             if not await self._navigate_and_wait(page, url, '.ui-table__body', 60000):
                 return []
+
+            # Parse season from page if not provided
+            if season is None:
+                parsed_season = await self._parse_season_from_page(page)
+                logger.info(f'Parsed season from page: {parsed_season}')
+            else:
+                parsed_season = season
 
             # Use optimized selectors to get table rows directly
             table_rows = await page.query_selector_all('.ui-table__row')
@@ -465,22 +490,28 @@ class LivesportScraper:
                     team_urls.append(None)
                     continue
 
-            # Second pass: scrape coaches for each team
-            for team_data, team_url in zip(standings_data, team_urls, strict=True):
-                if team_data is None or team_url is None:
-                    continue
+            # Second pass: scrape coaches for each team (only for current season)
+            if not is_archived_season:
+                logger.info('Scraping coaches for current season')
+                for team_data, team_url in zip(standings_data, team_urls, strict=True):
+                    if team_data is None or team_url is None:
+                        continue
 
-                try:
-                    coach = await self._scrape_team_coach_by_url(page, team_url)
-                    if coach:
-                        team_data['coach'] = coach
-                        logger.debug(
-                            f'Scraped coach for {team_data["team"]["name"]}: {coach}'
+                    try:
+                        coach = await self._scrape_team_coach_by_url(page, team_url)
+                        if coach:
+                            team_data['coach'] = coach
+                            logger.debug(
+                                f'Scraped coach for {team_data["team"]["name"]}: {coach}'
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f'Error scraping coach for {team_data["team"]["name"]}: {e}'
                         )
-                except Exception as e:
-                    logger.warning(
-                        f'Error scraping coach for {team_data["team"]["name"]}: {e}'
-                    )
+            else:
+                logger.info(
+                    f'Skipping coach scraping for archived season {parsed_season}'
+                )
 
             # Filter out None entries
             standings_data = [data for data in standings_data if data is not None]
@@ -557,16 +588,27 @@ class LivesportScraper:
             return None
 
     async def scrape_league_matches(
-        self, country: str, league_name: str
+        self, country: str, league_name: str, season: int | None = None
     ) -> list[CommonMatchData]:
-        """Scrape league matches from livesport.com"""
+        """Scrape league matches from livesport.com
+
+        Args:
+            country: Country name (e.g., 'England')
+            league_name: League name (e.g., 'Premier League')
+            season: Optional season year (e.g., 2024). If None, parses season from page.
+                    If provided, constructs URL for archived season (e.g., -2024-2025)
+        """
         country_lower = country.lower().replace(' ', '-')
         league_lower = league_name.lower().replace(' ', '-')
-        url = (
-            f'https://www.livesport.com/soccer/{country_lower}/{league_lower}/results/'
-        )
 
-        logger.info(f'Scraping league matches from: {url}')
+        # Add season suffix for archived seasons (e.g., premier-league-2024-2025)
+        if season is not None:
+            season_suffix = f'-{season}-{season + 1}'
+            url = f'https://www.livesport.com/soccer/{country_lower}/{league_lower}{season_suffix}/results/'
+        else:
+            url = f'https://www.livesport.com/soccer/{country_lower}/{league_lower}/results/'
+
+        logger.info(f'Scraping league matches from: {url} (season: {season})')
 
         browser = await self._setup_browser()
 
@@ -578,9 +620,13 @@ class LivesportScraper:
             ):
                 return []
 
-            # Parse season from the page
-            season = await self._parse_season_from_page(page)
-            logger.info(f'Using season: {season}')
+            # Parse season from page if not provided
+            if season is None:
+                parsed_season = await self._parse_season_from_page(page)
+                logger.info(f'Parsed season from page: {parsed_season}')
+                season = parsed_season
+            else:
+                logger.info(f'Using provided season: {season}')
 
             # Use the correct selectors based on the HTML structure
             matches_data = []
@@ -696,7 +742,9 @@ class LivesportScraper:
                             if time_element:
                                 date_text = await time_element.inner_text()
                                 if date_text:
-                                    match_date = self._parse_match_date(date_text)
+                                    match_date = self._parse_match_date(
+                                        date_text, season
+                                    )
 
                             # Create common match format
                             match_data = self._create_common_match_data(
@@ -784,13 +832,13 @@ class LivesportScraper:
             # Look for the season info div
             season_element = await page.query_selector('.heading__info')
             if not season_element:
-                logger.debug('No season info found, using default season 2025')
-                return 2025
+                logger.debug('No season info found, using default season')
+                return self.DEFAULT_SEASON
 
             season_text = await season_element.inner_text()
             if not season_text:
-                logger.debug('Empty season text, using default season 2025')
-                return 2025
+                logger.debug('Empty season text, using default season')
+                return self.DEFAULT_SEASON
 
             # Extract first number before "/" from text like "2025/2026"
             season_match = re.search(r'^(\d+)', season_text.strip())
@@ -800,19 +848,32 @@ class LivesportScraper:
                 return season
             else:
                 logger.debug(
-                    f'Could not parse season from: {season_text}, using default 2025'
+                    f'Could not parse season from: {season_text}, using default'
                 )
-                return 2025
+                return self.DEFAULT_SEASON
 
         except Exception as e:
-            logger.error(f'Error parsing season: {e}, using default 2025')
-            return 2025
+            logger.error(
+                f'Error parsing season: {e}, using default {self.DEFAULT_SEASON}'
+            )
+            return self.DEFAULT_SEASON
 
-    def _parse_match_date(self, date_text: str) -> datetime | None:
-        """Parse match date from text like 'Aug 25\n12:00 AM'"""
+    def _parse_match_date(
+        self, date_text: str, season: int | None = None
+    ) -> datetime | None:
+        """Parse match date from text like 'Aug 25\n12:00 AM'
+
+        Args:
+            date_text: Date text to parse
+            season: Optional season year. If None, uses DEFAULT_SEASON
+        """
         try:
             from datetime import datetime
             import re
+
+            # Use provided season or default
+            if season is None:
+                season = self.DEFAULT_SEASON
 
             # Clean the text and split by newline
             lines = date_text.strip().split('\n')
@@ -850,7 +911,7 @@ class LivesportScraper:
                 return None
 
             month = month_map[month_name]
-            year = 2025  # Assuming current season
+            year = season
 
             # Parse the time part (e.g., "12:00 AM")
             time_match = re.match(r'(\d+):(\d+)\s+(AM|PM)', time_part)
@@ -874,16 +935,31 @@ class LivesportScraper:
             return None
 
     async def scrape_league_fixtures(
-        self, country: str, league_name: str
+        self, country: str, league_name: str, season: int | None = None
     ) -> list[CommonMatchData]:
-        """Scrape scheduled fixtures for a specific league"""
-        logger.info(f'Scraping fixtures for {country}: {league_name}')
+        """Scrape scheduled fixtures for a specific league
+
+        Args:
+            country: Country name (e.g., 'England')
+            league_name: League name (e.g., 'Premier League')
+            season: Optional season year (e.g., 2024). If None, parses season from page.
+                    If provided, constructs URL for archived season (e.g., -2024-2025)
+        """
+        logger.info(
+            f'Scraping fixtures for {country}: {league_name} (season: {season})'
+        )
 
         try:
             # Build the fixtures URL
             country_slug = country.lower()
             league_slug = league_name.lower().replace(' ', '-')
-            fixtures_url = f'https://www.livesport.com/soccer/{country_slug}/{league_slug}/fixtures/'
+
+            # Add season suffix for archived seasons (e.g., premier-league-2024-2025)
+            if season is not None:
+                season_suffix = f'-{season}-{season + 1}'
+                fixtures_url = f'https://www.livesport.com/soccer/{country_slug}/{league_slug}{season_suffix}/fixtures/'
+            else:
+                fixtures_url = f'https://www.livesport.com/soccer/{country_slug}/{league_slug}/fixtures/'
 
             logger.info(f'Navigating to fixtures URL: {fixtures_url}')
 
@@ -899,9 +975,13 @@ class LivesportScraper:
                 logger.error(f'Failed to load fixtures page: {fixtures_url}')
                 return []
 
-            # Parse season from the page
-            season = await self._parse_season_from_page(page)
-            logger.info(f'Using season: {season}')
+            # Parse season from page if not provided
+            if season is None:
+                parsed_season = await self._parse_season_from_page(page)
+                logger.info(f'Parsed season from page: {parsed_season}')
+                season = parsed_season
+            else:
+                logger.info(f'Using provided season: {season}')
 
             # Handle cookie banner if present
             await self._handle_cookie_banner(page)
@@ -1040,10 +1120,13 @@ class LivesportScraper:
         country: str,
         league_name: str,
         round_number: int = None,
-        season: int = 2025,
+        season: int | None = None,
     ) -> CommonMatchData | None:
         """Extract a single fixture from a match element"""
         try:
+            # Use DEFAULT_SEASON if season is not provided
+            if season is None:
+                season = self.DEFAULT_SEASON
             # Extract date and time from the event__time element
             time_element = await element.query_selector('.event__time')
             if not time_element:
@@ -1104,7 +1187,7 @@ class LivesportScraper:
             date_time_text = f'{date_part} {time_part}'
 
             # Parse the date and time
-            match_datetime = self._parse_fixture_datetime(date_time_text)
+            match_datetime = self._parse_fixture_datetime(date_time_text, season)
 
             if not match_datetime:
                 logger.warning(f'Could not parse datetime from: {date_time_text}')
@@ -1133,9 +1216,20 @@ class LivesportScraper:
             logger.error(f'Error extracting single fixture: {e}')
             return None
 
-    def _parse_fixture_datetime(self, date_text: str) -> datetime | None:
-        """Parse fixture datetime from text like 'Aug 30 06:00 PM'"""
+    def _parse_fixture_datetime(
+        self, date_text: str, season: int | None = None
+    ) -> datetime | None:
+        """Parse fixture datetime from text like 'Aug 30 06:00 PM'
+
+        Args:
+            date_text: Date text to parse
+            season: Optional season year. If None, uses DEFAULT_SEASON
+        """
         try:
+            # Use provided season or default
+            if season is None:
+                season = self.DEFAULT_SEASON
+
             # Clean the text
             date_text = date_text.strip()
 
@@ -1171,7 +1265,7 @@ class LivesportScraper:
                 return None
 
             month = month_map[month_name]
-            year = 2025  # Assuming current season
+            year = season
 
             # Parse the time part (e.g., "06:00 PM")
             time_match = re.match(r'(\d+):(\d+)\s+(AM|PM)', time_part)
