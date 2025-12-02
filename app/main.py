@@ -16,7 +16,6 @@ from app.api.middleware import MiniAppSecurityMiddleware, SecurityMiddleware
 from app.api.mini_app_routes import router as mini_app_router
 from app.api.root import router as root_router
 from app.bet_rules.rule_engine import BettingRulesEngine
-from app.db.sqlalchemy_models import create_tables
 from app.settings import settings
 
 
@@ -30,7 +29,7 @@ async def lifespan(app: FastAPI) -> None:
     logger.info('Starting Football Betting Analysis App')
 
     # Create database tables
-    create_tables()
+    # create_tables()
     logger.info('Database tables created')
 
     # Initialize admin system

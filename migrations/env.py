@@ -29,6 +29,8 @@ from app.db.sqlalchemy_models import (  # noqa: E402, F401
     Team,
     TelegramUser,
 )
+# Import AdminUser model (it uses the same Base)
+from app.admin.models import AdminUser  # noqa: E402, F401
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -41,7 +43,11 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    """Get database URL from sync engine"""
+    """Get database URL from alembic.ini config or sync engine"""
+    # Use URL from alembic.ini if available, otherwise fall back to sync engine
+    url = config.get_main_option("sqlalchemy.url")
+    if url:
+        return url
     engine = get_sync_engine()
     return str(engine.url)
 
@@ -64,6 +70,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={'paramstyle': 'named'},
+        compare_type=True,
+        include_schemas=True,
     )
 
     with context.begin_transaction():
@@ -77,13 +85,21 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Get the engine from our session module
-    engine = get_sync_engine()
+    # Get the engine from alembic.ini config or session module
+    url = get_url()
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    engine = connectable
 
     with engine.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            compare_type=True,
+            include_schemas=True,
         )
 
         with context.begin_transaction():
