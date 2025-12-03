@@ -27,6 +27,7 @@ from app.db.sqlalchemy_models import (  # noqa: E402, F401
     Match,
     NotificationLog,
     Team,
+    TeamStanding,
     TelegramUser,
 )
 # Import AdminUser model (it uses the same Base)

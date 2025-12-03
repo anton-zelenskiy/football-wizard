@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -44,19 +45,25 @@ class League(Base):
     # Relationships
     teams = relationship('Team', back_populates='league')
     matches = relationship('Match', back_populates='league')
+    team_standings = relationship('TeamStanding', back_populates='league')
 
     def __str__(self):
         return f'{self.name} ({self.country})'
 
 
 class Team(Base):
-    """SQLAlchemy Team model"""
+    """SQLAlchemy Team model
+
+    Represents a team with basic information. Season-specific statistics
+    are stored in TeamStanding model.
+    """
 
     __tablename__ = 'team'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     league_id = Column(Integer, ForeignKey('league.id'), nullable=False)
+    # Legacy fields - kept for backward compatibility but should use TeamStanding
     rank = Column(Integer, nullable=True)
     games_played = Column(Integer, default=0)
     wins = Column(Integer, default=0)
@@ -77,9 +84,51 @@ class Team(Base):
     away_matches = relationship(
         'Match', foreign_keys='Match.away_team_id', back_populates='away_team'
     )
+    standings = relationship('TeamStanding', back_populates='team')
 
     def __str__(self):
         return f'{self.name}'
+
+
+class TeamStanding(Base):
+    """SQLAlchemy TeamStanding model for season-specific team statistics
+
+    Stores team statistics for a specific season. This allows tracking
+    historical data without overwriting current season statistics.
+    """
+
+    __tablename__ = 'team_standing'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey('team.id'), nullable=False)
+    league_id = Column(Integer, ForeignKey('league.id'), nullable=False)
+    season = Column(Integer, nullable=False)
+    rank = Column(Integer, nullable=True)
+    games_played = Column(Integer, default=0)
+    wins = Column(Integer, default=0)
+    draws = Column(Integer, default=0)
+    losses = Column(Integer, default=0)
+    goals_scored = Column(Integer, default=0)
+    goals_conceded = Column(Integer, default=0)
+    points = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Unique constraint: one standing per team/league/season combination
+    __table_args__ = (
+        UniqueConstraint(
+            'team_id', 'league_id', 'season', name='uq_team_league_season'
+        ),
+    )
+
+    # Relationships
+    team = relationship('Team', back_populates='standings')
+    league = relationship('League')
+
+    def __str__(self):
+        return (
+            f'{self.team.name} - {self.league.name} ({self.season}) - Rank {self.rank}'
+        )
 
 
 class Match(Base):
@@ -138,7 +187,7 @@ class Match(Base):
 class BettingOpportunity(Base):
     """SQLAlchemy BettingOpportunity model"""
 
-    __tablename__ = 'BettingOpportunity'
+    __tablename__ = 'betting_opportunity'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey('match.id'), nullable=True)
@@ -214,7 +263,9 @@ class NotificationLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey('telegramuser.id'), nullable=False)
-    opportunity_id = Column(Integer, ForeignKey('BettingOpportunity.id'), nullable=True)
+    opportunity_id = Column(
+        Integer, ForeignKey('betting_opportunity.id'), nullable=True
+    )
     message = Column(Text, nullable=False)
     sent_at = Column(DateTime, default=datetime.now)
     success = Column(Boolean, default=True)

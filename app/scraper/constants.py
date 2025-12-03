@@ -1,3 +1,5 @@
+DEFAULT_SEASON = 2025
+
 LEAGUES_OF_INTEREST = {
     'England': ('Premier League',),
     # 'Spain': ('LaLiga',),

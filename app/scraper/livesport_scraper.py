@@ -13,7 +13,7 @@ from playwright.async_api import (
 from pydantic import BaseModel, Field
 import structlog
 
-from .constants import LEAGUES_OF_INTEREST
+from .constants import DEFAULT_SEASON, LEAGUES_OF_INTEREST
 
 
 logger = structlog.get_logger()
@@ -34,13 +34,13 @@ class CommonMatchData(BaseModel):
     minute: int | None = None
     red_cards_home: int = 0
     red_cards_away: int = 0
-    season: int = 2025  # Default season
+    season: int = DEFAULT_SEASON
 
 
 class LivesportScraper:
     """Unified scraper for livesport.com with common functionality for live matches and league data"""
 
-    DEFAULT_SEASON = 2025
+    DEFAULT_SEASON = DEFAULT_SEASON
 
     def __init__(self) -> None:
         self.monitored_leagues = LEAGUES_OF_INTEREST
@@ -1302,7 +1302,7 @@ class LivesportScraper:
         red_cards_home: int = 0,
         red_cards_away: int = 0,
         round_number: int = None,
-        season: int = 2025,
+        season: int = DEFAULT_SEASON,
     ) -> CommonMatchData:
         """Create a common match data structure for all match types"""
         return CommonMatchData(

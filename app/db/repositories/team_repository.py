@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.db.sqlalchemy_models import League, Team
+from app.scraper.constants import DEFAULT_SEASON
 
 from .base_repository import BaseRepository
+from .team_standing_repository import TeamStandingRepository
 
 
 logger = structlog.get_logger()
@@ -50,14 +52,26 @@ class TeamRepository(BaseRepository[Team]):
         return result.scalar_one_or_none()
 
     async def save_team_standings(
-        self, team_data: dict[str, Any], league_name: str, country: str
+        self,
+        team_data: dict[str, Any],
+        league_name: str,
+        country: str,
+        season: int | None = DEFAULT_SEASON,
     ) -> tuple[Team | None, dict[str, Any] | None]:
         """Save team standings/statistics.
 
         Mirrors the semantics of Peewee-based save_team_standings in storage.
+        Also saves to TeamStanding for season-specific tracking.
         Returns tuple of (Team | None, coach_change_info | None).
         coach_change_info contains: team_name, league_name, country, old_coach, new_coach
+
+        Args:
+            team_data: Team standing data dictionary
+            league_name: Name of the league
+            country: Country name
+            season: Optional season year (e.g., 2024)
         """
+
         # Normalize country name to prevent duplicates
         normalized_country = normalize_country_name(country)
 
@@ -85,8 +99,10 @@ class TeamRepository(BaseRepository[Team]):
             old_coach = existing_team.coach
             new_coach = team_data.get('coach')
 
-            if old_coach != new_coach and (
-                old_coach is not None or new_coach is not None
+            if (
+                old_coach != new_coach
+                and old_coach is not None
+                and new_coach is not None
             ):
                 coach_change_info = {
                     'team_name': team_name,
@@ -119,6 +135,13 @@ class TeamRepository(BaseRepository[Team]):
             await self.session.commit()
             await self.session.refresh(existing_team)
             logger.debug(f'Updated team statistics: {existing_team.name}')
+
+            # Also save to TeamStanding for season-specific tracking
+            standing_repo = TeamStandingRepository(self.session)
+            await standing_repo.save_standing(
+                existing_team.id, league.id, season, team_data
+            )
+
             return existing_team, coach_change_info
         else:
             # Create new team
@@ -141,6 +164,11 @@ class TeamRepository(BaseRepository[Team]):
             await self.session.commit()
             await self.session.refresh(new_team)
             logger.info(f'Created new team: {new_team.name}')
+
+            # Also save to TeamStanding for season-specific tracking
+            standing_repo = TeamStandingRepository(self.session)
+            await standing_repo.save_standing(new_team.id, league.id, season, team_data)
+
             return new_team, None
 
     async def get_or_create_team(self, team_name: str, league_id: int) -> Team:

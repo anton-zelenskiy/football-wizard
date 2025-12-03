@@ -299,7 +299,7 @@ class BettingTasks:
                     team_repo = TeamRepository(session)
                     for team in standings:
                         _, coach_change = await team_repo.save_team_standings(
-                            team, league_name, country
+                            team, league_name, country, season
                         )
                         if coach_change:
                             stats['coach_changes'].append(coach_change)

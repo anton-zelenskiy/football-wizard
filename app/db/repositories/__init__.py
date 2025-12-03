@@ -7,6 +7,7 @@ from .betting_opportunity_repository import BettingOpportunityRepository
 from .league_repository import LeagueRepository
 from .match_repository import MatchRepository
 from .team_repository import TeamRepository
+from .team_standing_repository import TeamStandingRepository
 from .telegram_user_repository import TelegramUserRepository
 
 
@@ -17,4 +18,5 @@ __all__ = [
     'LeagueRepository',
     'BettingOpportunityRepository',
     'TeamRepository',
+    'TeamStandingRepository',
 ]
