@@ -86,17 +86,37 @@ async def get_betting_opportunities(
             }
 
             if match:
+                # Get team ranks from TeamStanding
+                from app.db.repositories.team_standing_repository import (
+                    TeamStandingRepository,
+                )
+
+                home_rank = None
+                away_rank = None
+                if match.season:
+                    standing_repo = TeamStandingRepository(session)
+                    home_standing = await standing_repo.get_by_team_league_season(
+                        match.home_team.id, match.league.id, match.season
+                    )
+                    away_standing = await standing_repo.get_by_team_league_season(
+                        match.away_team.id, match.league.id, match.season
+                    )
+                    if home_standing:
+                        home_rank = home_standing.rank
+                    if away_standing:
+                        away_rank = away_standing.rank
+
                 opportunity_data['match'] = {
                     'id': match.id,
                     'home_team': {
                         'id': match.home_team.id,
                         'name': match.home_team.name,
-                        'rank': match.home_team.rank,
+                        'rank': home_rank,
                     },
                     'away_team': {
                         'id': match.away_team.id,
                         'name': match.away_team.name,
-                        'rank': match.away_team.rank,
+                        'rank': away_rank,
                     },
                     'league': {
                         'id': match.league.id,

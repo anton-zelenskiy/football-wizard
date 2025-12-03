@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.team_repository import TeamRepository
+from app.db.repositories.team_standing_repository import TeamStandingRepository
 from app.db.sqlalchemy_models import Base
+from app.scraper.constants import DEFAULT_SEASON
 
 
 @pytest_asyncio.fixture
@@ -50,24 +52,37 @@ def make_standings(
 async def test_save_team_standings_creates_and_updates(db_session: AsyncSession):
     league_repo = LeagueRepository(db_session)
     team_repo = TeamRepository(db_session)
+    standing_repo = TeamStandingRepository(db_session)
 
     # Ensure league exists
-    await league_repo.save_league('Test League', 'spain')
+    league = await league_repo.save_league('Test League', 'spain')
 
     # Create team standings
     data = make_standings('Valencia', rank=5)
-    team = await team_repo.save_team_standings(data, 'Test League', 'SPAIN')
+    team, _ = await team_repo.save_team_standings(data, 'Test League', 'SPAIN')
     assert team is not None
     assert team.name == 'Valencia'
-    assert team.rank == 5
-    assert team.points == 20
+
+    # Check TeamStanding instead of Team
+    standing = await standing_repo.get_by_team_league_season(
+        team.id, league.id, DEFAULT_SEASON
+    )
+    assert standing is not None
+    assert standing.rank == 5
+    assert standing.points == 20
 
     # Update standings
     updated = make_standings('Valencia', rank=3, points=24)
-    team2 = await team_repo.save_team_standings(updated, 'Test League', 'Spain')
+    team2, _ = await team_repo.save_team_standings(updated, 'Test League', 'Spain')
     assert team2.id == team.id
-    assert team2.rank == 3
-    assert team2.points == 24
+
+    # Check updated TeamStanding
+    standing2 = await standing_repo.get_by_team_league_season(
+        team2.id, league.id, DEFAULT_SEASON
+    )
+    assert standing2 is not None
+    assert standing2.rank == 3
+    assert standing2.points == 24
 
 
 @pytest.mark.asyncio
@@ -75,4 +90,4 @@ async def test_save_team_standings_league_not_found(db_session: AsyncSession):
     team_repo = TeamRepository(db_session)
     data = make_standings('Unknown FC')
     result = await team_repo.save_team_standings(data, 'Missing League', 'Italy')
-    assert result is None
+    assert result[0] is None

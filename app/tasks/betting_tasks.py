@@ -392,8 +392,28 @@ class BettingTasks:
         home_matches_data = [m.to_pydantic() for m in home_recent_matches]
         away_matches_data = [m.to_pydantic() for m in away_recent_matches]
 
+        # Get team ranks from TeamStanding
+        from app.db.repositories.team_standing_repository import TeamStandingRepository
+        from app.db.session import get_async_db_session
+
+        home_rank = None
+        away_rank = None
+        if match.season:
+            async with get_async_db_session() as session:
+                standing_repo = TeamStandingRepository(session)
+                home_standing = await standing_repo.get_by_team_league_season(
+                    match.home_team.id, match.league.id, match.season
+                )
+                away_standing = await standing_repo.get_by_team_league_season(
+                    match.away_team.id, match.league.id, match.season
+                )
+                if home_standing:
+                    home_rank = home_standing.rank
+                if away_standing:
+                    away_rank = away_standing.rank
+
         # Create MatchSummary with recent matches and team data
-        match_summary = MatchSummary.from_match(match)
+        match_summary = MatchSummary.from_match(match, home_rank, away_rank)
         match_summary.home_recent_matches = home_matches_data
         match_summary.away_recent_matches = away_matches_data
 

@@ -58,12 +58,12 @@ class WorkerSettings:
             job_id='refresh_league_data',
         ),
         # Live matches analysis every 3 minutes (includes scraping and analysis)
-        cron(
-            live_matches_analysis,
-            minute=list(range(0, 60, 3)),
-            unique=True,
-            job_id='live_matches_analysis',
-        ),
+        # cron(
+        #     live_matches_analysis,
+        #     minute=list(range(0, 60, 3)),
+        #     unique=True,
+        #     job_id='live_matches_analysis',
+        # ),
         # Heartbeat every minute for testing
         cron(heartbeat, minute=list(range(60)), unique=True, job_id='heartbeat'),
     ]

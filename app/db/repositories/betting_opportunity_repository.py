@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 import structlog
 
 from app.bet_rules.bet_rules import Bet
-from app.bet_rules.structures import BetOutcome, LeagueData, MatchSummary, TeamData
+from app.bet_rules.structures import BetOutcome, MatchSummary
 from app.db.sqlalchemy_models import BettingOpportunity, Match
 
 from .base_repository import BaseRepository
@@ -193,34 +193,26 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
         ):
             return None
 
-        # Build MatchSummary compatible with rules
-        # Calculate teams count from league relationship
-        teams_count = len(match.league.teams) if match.league.teams else 0
+        # Get team ranks from TeamStanding
+        from app.db.repositories.team_standing_repository import TeamStandingRepository
 
-        match_summary = MatchSummary(
-            match_id=match.id,
-            home_team_data=TeamData(
-                id=match.home_team.id,
-                name=match.home_team.name,
-                rank=match.home_team.rank,
-            ),
-            away_team_data=TeamData(
-                id=match.away_team.id,
-                name=match.away_team.name,
-                rank=match.away_team.rank,
-            ),
-            league=LeagueData(
-                id=match.league.id,
-                name=match.league.name,
-                teams_count=teams_count,
-            ),
-            country=match.league.country,
-            match_date=match.match_date.strftime('%Y-%m-%d %H:%M')
-            if match.match_date
-            else None,
-            home_score=match.home_score,
-            away_score=match.away_score,
-        )
+        home_rank = None
+        away_rank = None
+        if match.season:
+            standing_repo = TeamStandingRepository(self.session)
+            home_standing = await standing_repo.get_by_team_league_season(
+                match.home_team.id, match.league.id, match.season
+            )
+            away_standing = await standing_repo.get_by_team_league_season(
+                match.away_team.id, match.league.id, match.season
+            )
+            if home_standing:
+                home_rank = home_standing.rank
+            if away_standing:
+                away_rank = away_standing.rank
+
+        # Build MatchSummary compatible with rules
+        match_summary = MatchSummary.from_match(match, home_rank, away_rank)
 
         # Extract team_analyzed from JSON details
         try:

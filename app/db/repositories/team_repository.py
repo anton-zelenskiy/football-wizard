@@ -69,8 +69,11 @@ class TeamRepository(BaseRepository[Team]):
             team_data: Team standing data dictionary
             league_name: Name of the league
             country: Country name
-            season: Optional season year (e.g., 2024)
+            season: Optional season year (e.g., 2024). Defaults to DEFAULT_SEASON if None.
         """
+        # Ensure season is not None - use DEFAULT_SEASON as fallback
+        if season is None:
+            season = DEFAULT_SEASON
 
         # Normalize country name to prevent duplicates
         normalized_country = normalize_country_name(country)
@@ -115,28 +118,16 @@ class TeamRepository(BaseRepository[Team]):
                     f'Coach change detected for {team_name}: {old_coach} -> {new_coach}'
                 )
 
-            # Update existing team statistics
-            existing_team.rank = team_data.get('rank')
-            existing_team.games_played = team_data.get('all', {}).get('played', 0)
-            existing_team.wins = team_data.get('all', {}).get('win', 0)
-            existing_team.draws = team_data.get('all', {}).get('draw', 0)
-            existing_team.losses = team_data.get('all', {}).get('lose', 0)
-            existing_team.goals_scored = (
-                team_data.get('all', {}).get('goals', {}).get('for', 0)
-            )
-            existing_team.goals_conceded = (
-                team_data.get('all', {}).get('goals', {}).get('against', 0)
-            )
-            existing_team.points = team_data.get('points', 0)
+            # Update coach if provided
             if 'coach' in team_data:
                 existing_team.coach = team_data.get('coach')
             existing_team.updated_at = datetime.now()
 
             await self.session.commit()
             await self.session.refresh(existing_team)
-            logger.debug(f'Updated team statistics: {existing_team.name}')
+            logger.debug(f'Updated team: {existing_team.name}')
 
-            # Also save to TeamStanding for season-specific tracking
+            # Save to TeamStanding for season-specific tracking
             standing_repo = TeamStandingRepository(self.session)
             await standing_repo.save_standing(
                 existing_team.id, league.id, season, team_data
@@ -148,16 +139,6 @@ class TeamRepository(BaseRepository[Team]):
             new_team = Team(
                 name=team_name,
                 league_id=league.id,
-                rank=team_data.get('rank'),
-                games_played=team_data.get('all', {}).get('played', 0),
-                wins=team_data.get('all', {}).get('win', 0),
-                draws=team_data.get('all', {}).get('draw', 0),
-                losses=team_data.get('all', {}).get('lose', 0),
-                goals_scored=team_data.get('all', {}).get('goals', {}).get('for', 0),
-                goals_conceded=team_data.get('all', {})
-                .get('goals', {})
-                .get('against', 0),
-                points=team_data.get('points', 0),
                 coach=team_data.get('coach'),
             )
             self.session.add(new_team)

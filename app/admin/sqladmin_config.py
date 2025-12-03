@@ -52,32 +52,25 @@ class TeamAdmin(ModelView, model=Team):
     icon = 'fa fa-users'
 
     # Display columns
-    column_list = [Team.id, Team.name, Team.league, Team.rank, Team.points]
+    column_list = [Team.id, Team.name, Team.league, Team.coach]
     column_details_list = [
         Team.id,
         Team.name,
         Team.league,
-        Team.rank,
-        Team.games_played,
-        Team.wins,
-        Team.draws,
-        Team.losses,
-        Team.goals_scored,
-        Team.goals_conceded,
-        Team.points,
+        Team.coach,
         Team.created_at,
         Team.updated_at,
     ]
 
     # Search and filter capabilities - this is where foreign key filtering works!
     column_searchable_list = [Team.name]
-    column_sortable_list = [Team.id, Team.name, Team.rank, Team.points]
+    column_sortable_list = [Team.id, Team.name]
     column_filters = [
         ForeignKeyFilter(Team.league_id, League.name, title='League'),
     ]
 
     # Form configuration
-    form_columns = [Team.name, Team.league, Team.rank]
+    form_columns = [Team.name, Team.league, Team.coach]
 
     def is_accessible(self, request: Request) -> bool:
         """Check if user is authenticated"""
