@@ -191,7 +191,7 @@ class BettingTasks:
         )
         return saved_opportunities
 
-    async def refresh_league_data_task(self, ctx, season: int = None) -> str:
+    async def refresh_league_data_task(self, ctx: dict, season: int = None) -> str:
         """Refresh league standings and team statistics iteratively"""
         logger.info('Starting league data refresh task')
 
@@ -370,21 +370,22 @@ class BettingTasks:
 
     async def _create_match_summary_with_recent_matches(self, match) -> MatchSummary:
         """Create MatchSummary with populated recent matches for both teams"""
-        # Get recent matches for both teams using repository
+        # Get recent matches for both teams before this match's date
+        # This handles cases where matches from higher rounds may be played earlier
         home_recent_matches = (
             await self.match_repo.get_team_matches_by_season_and_rounds(
                 match.home_team.id,
                 match.season,
-                match.round,
-                self.rules_engine.rounds_back,
+                before_date=match.match_date,
+                limit=self.rules_engine.rounds_back,
             )
         )
         away_recent_matches = (
             await self.match_repo.get_team_matches_by_season_and_rounds(
                 match.away_team.id,
                 match.season,
-                match.round,
-                self.rules_engine.rounds_back,
+                before_date=match.match_date,
+                limit=self.rules_engine.rounds_back,
             )
         )
 
@@ -434,7 +435,9 @@ async def live_matches_analysis(ctx) -> None:
     return await tasks.live_matches_analysis_task(ctx)
 
 
-async def refresh_league_data(ctx) -> None:
+async def refresh_league_data(
+    ctx, season: int = None, country: str = None, league_name: str = None
+) -> None:
     """League data refresh task for arq"""
     tasks = BettingTasks()
-    return await tasks.refresh_league_data_task(ctx, season=ctx.get('season'))
+    return await tasks.refresh_league_data_task(ctx, season=season)

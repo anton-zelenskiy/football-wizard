@@ -154,30 +154,59 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
         )
         return result.scalars().all()
 
-    async def get_betting_statistics(self) -> dict[str, int | float]:
-        """Return counts for total, wins, losses, and win_rate (%)."""
-        result = await self.session.execute(
-            select(
-                func.count(BettingOpportunity.id),
-                func.sum(
-                    case(
-                        (BettingOpportunity.outcome == BetOutcome.WIN.value, 1), else_=0
+    async def get_betting_statistics(
+        self, season: int | None = None
+    ) -> dict[str, int | float]:
+        """Return counts for total, wins, losses, and win_rate (%).
+
+        Optionally filters by season and excludes deprecated rules such as
+        'live_red_card'.
+        """
+        try:
+            query = (
+                select(
+                    func.count(BettingOpportunity.id),
+                    func.sum(
+                        case(
+                            (BettingOpportunity.outcome == BetOutcome.WIN.value, 1),
+                            else_=0,
+                        )
+                    ),
+                    func.sum(
+                        case(
+                            (BettingOpportunity.outcome == BetOutcome.LOSE.value, 1),
+                            else_=0,
+                        )
+                    ),
+                )
+                .select_from(BettingOpportunity)
+                .join(Match, BettingOpportunity.match_id == Match.id)
+                .where(
+                    and_(
+                        BettingOpportunity.outcome != BetOutcome.UNKNOWN.value,
+                        BettingOpportunity.rule_slug != 'live_red_card',
                     )
-                ),
-                func.sum(
-                    case(
-                        (BettingOpportunity.outcome == BetOutcome.LOSE.value, 1),
-                        else_=0,
-                    )
-                ),
-            ).where(BettingOpportunity.outcome != BetOutcome.UNKNOWN.value)
-        )
-        total, wins, losses = result.one()
-        total = int(total or 0)
-        wins = int(wins or 0)
-        losses = int(losses or 0)
-        win_rate = round((wins / total * 100) if total > 0 else 0.0, 1)
-        return {'total': total, 'wins': wins, 'losses': losses, 'win_rate': win_rate}
+                )
+            )
+
+            if season is not None:
+                query = query.where(Match.season == season)
+
+            result = await self.session.execute(query)
+            total, wins, losses = result.one()
+            total = int(total or 0)
+            wins = int(wins or 0)
+            losses = int(losses or 0)
+            win_rate = round((wins / total * 100) if total > 0 else 0.0, 1)
+            return {
+                'total': total,
+                'wins': wins,
+                'losses': losses,
+                'win_rate': win_rate,
+            }
+        except Exception as e:
+            logger.error(f'Error getting betting statistics: {e}', season=season)
+            return {'total': 0, 'wins': 0, 'losses': 0, 'win_rate': 0.0}
 
     async def _determine_betting_outcome(
         self, opportunity: BettingOpportunity, match: Match
@@ -247,14 +276,21 @@ class BettingOpportunityRepository(BaseRepository[BettingOpportunity]):
                 )
             )
         )
-        pending = result.scalars().all()
+        pending = list(result.scalars().all())
 
         updated = 0
         for opp in pending:
-            outcome = await self._determine_betting_outcome(opp, opp.match)
+            # Ensure match relationship is accessible
+            match = opp.match
+            if not match:
+                logger.warning(f'Match not found for opportunity {opp.id}')
+                continue
+
+            outcome = await self._determine_betting_outcome(opp, match)
             if outcome is not None:
                 opp.outcome = outcome.value
                 updated += 1
+
         if updated:
             await self.session.commit()
         logger.info('Updated betting outcomes', count=updated)

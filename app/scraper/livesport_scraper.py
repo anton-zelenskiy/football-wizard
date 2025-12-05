@@ -42,7 +42,7 @@ class LivesportScraper:
 
     DEFAULT_SEASON = DEFAULT_SEASON
 
-    def __init__(self) -> None:
+    def __init__(self, scrape_coaches: bool = False) -> None:
         self.monitored_leagues = LEAGUES_OF_INTEREST
         self.browser_args = [
             '--no-sandbox',
@@ -67,6 +67,8 @@ class LivesportScraper:
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._cookie_banner_closed: bool = False
+
+        self._scrape_coaches = scrape_coaches
 
     async def __aenter__(self) -> 'LivesportScraper':
         """Async context manager entry"""
@@ -129,7 +131,7 @@ class LivesportScraper:
             logger.info(f'No cookie banner to close: {e}')
 
     async def _navigate_and_wait(
-        self, page: Page, url: str, selector: str, timeout: int = 60000
+        self, page: Page, url: str, selector: str, timeout: int = 10000
     ) -> bool:
         """Navigate to URL and wait for specific selector to load"""
         try:
@@ -491,7 +493,7 @@ class LivesportScraper:
                     continue
 
             # Second pass: scrape coaches for each team (only for current season)
-            if not is_archived_season:
+            if not is_archived_season and self._scrape_coaches:
                 logger.info('Scraping coaches for current season')
                 for team_data, team_url in zip(standings_data, team_urls, strict=True):
                     if team_data is None or team_url is None:
@@ -601,6 +603,8 @@ class LivesportScraper:
         country_lower = country.lower().replace(' ', '-')
         league_lower = league_name.lower().replace(' ', '-')
 
+        is_archived_season = season is not None
+
         # Add season suffix for archived seasons (e.g., premier-league-2024-2025)
         if season is not None:
             season_suffix = f'-{season}-{season + 1}'
@@ -619,6 +623,13 @@ class LivesportScraper:
                 page, url, '.event__round--static', 60000
             ):
                 return []
+
+            # When scraping historical data, Livesport only shows the last N rounds by
+            # default and provides a "Show more games" control that loads additional
+            # rounds. To ensure we scrape a complete season, iteratively click this
+            # control until no more rounds are available.
+            if is_archived_season:
+                await self._load_all_results_rounds(page)
 
             # Parse season from page if not provided
             if season is None:
@@ -780,6 +791,54 @@ class LivesportScraper:
         except Exception as e:
             logger.error(f'Unexpected error while scraping matches: {e}')
             return []
+
+    async def _load_all_results_rounds(self, page: Page) -> None:
+        """Click 'Show more games' until all historical rounds are loaded.
+
+        Livesport shows only a subset of recent rounds in the results view and
+        exposes a "Show more games" button at the bottom of the page that loads
+        additional historical rounds. For accurate historical scraping we need to
+        expand all available rounds before parsing the table.
+        """
+        try:
+            while True:
+                try:
+                    # Look for the "Show more games" caption by its data-testid
+                    button = await page.query_selector(
+                        'span[data-testid="wcl-scores-caption-05"]'
+                    )
+                    if not button:
+                        logger.debug('No "Show more games" button found')
+                        break
+
+                    text = (await button.inner_text()).strip()
+                    if 'Show more games' not in text:
+                        logger.debug(
+                            '"Show more games" caption not present, stopping expansion',
+                        )
+                        break
+
+                    logger.info('Clicking "Show more games" to load additional rounds')
+                    await button.click()
+                    # Give the page some time to load additional content
+                    await page.wait_for_timeout(2000)
+                except TimeoutError:
+                    logger.debug(
+                        'Timeout while looking for "Show more games" button; '
+                        'assuming all rounds are loaded'
+                    )
+                    break
+                except Exception as e:
+                    logger.warning(
+                        'Error while expanding additional results rounds, '
+                        'continuing with currently loaded data',
+                        error=str(e),
+                    )
+                    break
+        except Exception as e:
+            logger.error(
+                f'Unexpected error while loading all results rounds: {e}',
+            )
 
     def _is_monitored_league(self, league_name: str, country: str = None) -> bool:
         """Check if the league is in our monitored list"""
@@ -945,6 +1004,10 @@ class LivesportScraper:
             season: Optional season year (e.g., 2024). If None, parses season from page.
                     If provided, constructs URL for archived season (e.g., -2024-2025)
         """
+        # if season is not None:
+        #     logger.error('No fixtures for historical seasons are available')
+        #     return []
+
         logger.info(
             f'Scraping fixtures for {country}: {league_name} (season: {season})'
         )
@@ -969,7 +1032,7 @@ class LivesportScraper:
 
             # Navigate to fixtures page
             success = await self._navigate_and_wait(
-                page, fixtures_url, '.event__round--static', 60000
+                page, fixtures_url, '.event__round--static', 10000
             )
             if not success:
                 logger.error(f'Failed to load fixtures page: {fixtures_url}')

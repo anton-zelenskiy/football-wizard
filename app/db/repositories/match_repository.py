@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 import structlog
@@ -218,19 +218,50 @@ class MatchRepository(BaseRepository[Match]):
             return []
 
     async def get_team_matches_by_season_and_rounds(
-        self, team_id: int, season: int, current_round: int, rounds_back: int = 5
+        self,
+        team_id: int,
+        season: int,
+        before_date: datetime | None = None,
+        limit: int = 5,
     ) -> list[Match]:
-        """Get team matches from specific season and rounds for analysis"""
-        try:
-            # Calculate the range of rounds to include
-            start_round = max(1, current_round - rounds_back)
-            end_round = current_round - 1  # Exclude current round
+        """Get team's most recent matches from specific season for analysis.
 
-            if end_round < start_round:
-                logger.warning('No rounds found')
+        Gets the N most recent finished matches (by match_date) for a team in a season,
+        optionally before a specific date. This handles cases where matches from higher
+        rounds may be played earlier.
+
+        Args:
+            team_id: Team ID
+            season: Season year
+            before_date: Optional date to get matches before (exclusive). If None,
+                        gets the latest match_date for the team and uses that.
+            limit: Number of matches to return (default: 5)
+
+        Returns:
+            List of matches ordered by match_date descending (most recent first)
+        """
+        try:
+            # If before_date is not provided, get the latest match_date for this team
+            if before_date is None:
+                latest_date_result = await self.session.execute(
+                    select(func.max(Match.match_date)).where(
+                        and_(
+                            (Match.home_team_id == team_id)
+                            | (Match.away_team_id == team_id),
+                            Match.season == season,
+                            Match.status == 'finished',
+                        )
+                    )
+                )
+                before_date = latest_date_result.scalar_one_or_none()
+
+            if before_date is None:
+                logger.debug(
+                    f'No finished matches found for team {team_id} in season {season}'
+                )
                 return []
 
-            # Get matches where team participated in the specified season and rounds
+            # Get matches where team participated before the specified date
             result = await self.session.execute(
                 select(Match)
                 .options(
@@ -243,24 +274,105 @@ class MatchRepository(BaseRepository[Match]):
                         (Match.home_team_id == team_id)
                         | (Match.away_team_id == team_id),
                         Match.season == season,
-                        Match.round >= start_round,
-                        Match.round <= end_round,
+                        Match.match_date < before_date,
                         Match.status == 'finished',
                     )
                 )
-                .order_by(Match.round.desc(), Match.match_date.desc())
+                .order_by(Match.match_date.desc())
+                .limit(limit)
             )
 
-            match_list = result.scalars().all()
-            logger.debug(f'Found {len(match_list)} matches')
+            match_list = list(result.scalars().all())
+            logger.debug(
+                f'Found {len(match_list)} matches for team {team_id} before {before_date}'
+            )
             return match_list
         except Exception as e:
             logger.error(
                 'Error getting matches',
                 error=str(e),
-                current_round=current_round,
-                rounds_back=rounds_back,
+                before_date=before_date,
+                limit=limit,
                 team_id=team_id,
                 season=season,
             )
             return []
+
+    async def get_matches_by_league_season_round(
+        self, league_id: int, season: int, round_number: int
+    ) -> list[Match]:
+        """Get matches by league, season, and round number"""
+        try:
+            result = await self.session.execute(
+                select(Match)
+                .options(
+                    selectinload(Match.home_team),
+                    selectinload(Match.away_team),
+                    selectinload(Match.league).selectinload(League.teams),
+                )
+                .where(
+                    and_(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                        Match.round == round_number,
+                        Match.status == 'finished',
+                    )
+                )
+                .order_by(Match.match_date.asc())
+            )
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(
+                f'Error getting matches by league/season/round: {e}',
+                league_id=league_id,
+                season=season,
+                round_number=round_number,
+            )
+            return []
+
+    async def get_max_round_by_league_season(
+        self, league_id: int, season: int
+    ) -> int | None:
+        """Get maximum round number for a league and season"""
+        try:
+            result = await self.session.execute(
+                select(func.max(Match.round)).where(
+                    and_(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                        Match.status == 'finished',
+                    )
+                )
+            )
+            max_round = result.scalar_one_or_none()
+            return max_round if max_round is not None else None
+        except Exception as e:
+            logger.error(
+                f'Error getting max round: {e}',
+                league_id=league_id,
+                season=season,
+            )
+            return None
+
+    async def get_league_by_name_and_country(
+        self, league_name: str, country_name: str
+    ) -> League | None:
+        """Get league by name and country"""
+        try:
+            normalized_country = normalize_country_name(country_name)
+            result = await self.session.execute(
+                select(League).where(
+                    and_(
+                        League.name == league_name,
+                        League.country == normalized_country,
+                    )
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(
+                f'Error getting league: {e}',
+                league_name=league_name,
+                country=country_name,
+            )
+            return None

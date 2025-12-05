@@ -389,16 +389,17 @@ async def test_get_team_matches_by_season_and_rounds(db_session):
         )
         await repo.save_match(match_data)
 
-    # Get matches for rounds 2-4 (current round 5, looking back 3 rounds)
+    # Get 3 most recent matches before round 5 match date (Jan 15)
+    before_date = datetime(2024, 1, 15)
     matches = await repo.get_team_matches_by_season_and_rounds(
-        team.id, 2024, 5, rounds_back=3
+        team.id, 2024, before_date=before_date, limit=3
     )
 
-    assert len(matches) == 3  # Rounds 2, 3, 4
-    # Should be ordered by round desc, then match_date desc
-    assert matches[0].round == 4
-    assert matches[1].round == 3
-    assert matches[2].round == 2
+    assert len(matches) == 3  # Should get 3 matches before Jan 15
+    # Should be ordered by match_date descending (most recent first)
+    assert matches[0].match_date == datetime(2024, 1, 14)  # Round 4
+    assert matches[1].match_date == datetime(2024, 1, 13)  # Round 3
+    assert matches[2].match_date == datetime(2024, 1, 12)  # Round 2
 
 
 @pytest.mark.asyncio
@@ -433,12 +434,22 @@ async def test_get_team_matches_by_season_and_rounds_insufficient_rounds(db_sess
     )
     await repo.save_match(match_data)
 
-    # Try to get matches for round 1 looking back 3 rounds (would need rounds -2, -1, 0)
+    # Try to get matches before the only match (round 1)
+    # First get the match to know its date
+    from sqlalchemy import select
+
+    from app.db.sqlalchemy_models import Match
+
+    match_result = await db_session.execute(
+        select(Match).where(Match.home_team_id == team.id)
+    )
+    match = match_result.scalar_one()
+
     matches = await repo.get_team_matches_by_season_and_rounds(
-        team.id, 2024, 1, rounds_back=3
+        team.id, 2024, before_date=match.match_date, limit=3
     )
 
-    assert len(matches) == 0  # No previous rounds available
+    assert len(matches) == 0  # No previous matches available
 
 
 @pytest.mark.asyncio
@@ -475,9 +486,11 @@ async def test_get_team_matches_by_season_and_rounds_different_seasons(db_sessio
             )
             await repo.save_match(match_data)
 
-    # Get matches for 2024 season only
+    # Get matches for 2024 season only (before round 4 match date)
+    # Round 4 match date would be around Jan 13 (10 + 4)
+    before_date = datetime(2024, 1, 13)
     matches = await repo.get_team_matches_by_season_and_rounds(
-        team.id, 2024, 4, rounds_back=2
+        team.id, 2024, before_date=before_date, limit=2
     )
 
     assert len(matches) == 2  # Only 2024 matches (rounds 2, 3)
@@ -519,8 +532,10 @@ async def test_get_team_matches_by_season_and_rounds_only_finished_matches(db_se
         await repo.save_match(match_data)
 
     # Get matches - should only return finished ones
+    # Use a date after all matches
+    before_date = datetime(2024, 1, 20)
     matches = await repo.get_team_matches_by_season_and_rounds(
-        team.id, 2024, 2, rounds_back=1
+        team.id, 2024, before_date=before_date, limit=5
     )
 
     assert len(matches) == 1  # Only the finished match
@@ -529,7 +544,7 @@ async def test_get_team_matches_by_season_and_rounds_only_finished_matches(db_se
 
 @pytest.mark.asyncio
 async def test_get_team_matches_by_season_and_rounds_ordering(db_session):
-    """Test that matches are ordered correctly (round desc, match_date desc)"""
+    """Test that matches are ordered correctly by match_date descending"""
     repo = MatchRepository(db_session)
 
     # Create a team and league first
@@ -584,20 +599,18 @@ async def test_get_team_matches_by_season_and_rounds_ordering(db_session):
         round_number=2,
         home_score=1,
         away_score=0,
-        match_date=datetime(2024, 1, 20),  # Latest date but lower round
+        match_date=datetime(2024, 1, 20),  # Latest date
     )
     await repo.save_match(match_data3)
 
-    # Get matches
+    # Get matches before a date after all matches
+    before_date = datetime(2024, 1, 25)
     matches = await repo.get_team_matches_by_season_and_rounds(
-        team.id, 2024, 4, rounds_back=2
+        team.id, 2024, before_date=before_date, limit=3
     )
 
     assert len(matches) == 3
-    # Should be ordered by round desc (3, 3, 2), then by match_date desc within same round
-    assert matches[0].round == 3
-    assert matches[0].match_date == datetime(2024, 1, 15)  # Later date first
-    assert matches[1].round == 3
-    assert matches[1].match_date == datetime(2024, 1, 10)  # Earlier date second
-    assert matches[2].round == 2
-    assert matches[2].match_date == datetime(2024, 1, 20)  # Lower round last
+    # Should be ordered by match_date descending (most recent first)
+    assert matches[0].match_date == datetime(2024, 1, 20)  # Latest date first
+    assert matches[1].match_date == datetime(2024, 1, 15)  # Second latest
+    assert matches[2].match_date == datetime(2024, 1, 10)  # Earliest last

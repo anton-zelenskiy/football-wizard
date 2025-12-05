@@ -315,7 +315,11 @@ class MatchSummary(BaseModel):
 
     @classmethod
     def from_match(
-        cls, match, home_team_rank: int | None = None, away_team_rank: int | None = None
+        cls,
+        match,
+        home_team_rank: int | None = None,
+        away_team_rank: int | None = None,
+        teams_count: int | None = None,
     ) -> 'MatchSummary':
         """Create MatchSummary from Match database model
 
@@ -323,9 +327,15 @@ class MatchSummary(BaseModel):
             match: Match database model
             home_team_rank: Optional rank for home team (from TeamStanding)
             away_team_rank: Optional rank for away team (from TeamStanding)
+            teams_count: Optional teams count (to avoid lazy loading issues)
         """
-        # Calculate teams count from league relationship
-        teams_count = len(match.league.teams) if match.league.teams else 0
+        # Calculate teams count from league relationship if not provided
+        if teams_count is None:
+            try:
+                teams_count = len(match.league.teams) if match.league.teams else 0
+            except Exception:
+                # Fallback if lazy loading fails
+                teams_count = 0
 
         return cls(
             match_id=match.id,
