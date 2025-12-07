@@ -76,6 +76,11 @@ class TeamAnalysis(BaseModel):
     consecutive_wins: int = Field(default=0, ge=0, description='Consecutive wins')
     consecutive_losses: int = Field(default=0, ge=0, description='Consecutive losses')
     consecutive_draws: int = Field(default=0, ge=0, description='Consecutive draws')
+    consecutive_no_wins: int = Field(
+        default=0,
+        ge=0,
+        description='Consecutive matches without wins (draws or losses)',
+    )
     consecutive_no_goals: int = Field(
         default=0, ge=0, description='Consecutive matches without goals'
     )
@@ -172,6 +177,9 @@ class TeamAnalysis(BaseModel):
         analysis.consecutive_draws = cls._calculate_consecutive_streak(
             recent_matches, team, 'draw'
         )
+        analysis.consecutive_no_wins = cls._calculate_consecutive_streak(
+            recent_matches, team, 'no_win'
+        )
         analysis.consecutive_no_goals = cls._calculate_consecutive_streak(
             recent_matches, team, 'no_goals'
         )
@@ -204,6 +212,12 @@ class TeamAnalysis(BaseModel):
                 streak += 1
             elif streak_type == 'draw' and TeamAnalysis._team_drew(match, team):
                 streak += 1
+            elif streak_type == 'no_win' and not TeamAnalysis._team_won(match, team):
+                # No win = draw or loss (but match must be finished)
+                if match.home_score is not None and match.away_score is not None:
+                    streak += 1
+                else:
+                    break
             elif streak_type == 'no_goals' and TeamAnalysis._team_no_goals(match, team):
                 streak += 1
             elif streak_type == 'goals' and not TeamAnalysis._team_no_goals(

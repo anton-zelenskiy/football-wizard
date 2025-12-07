@@ -663,6 +663,12 @@ class LivesportScraper:
                             round_number = int(match.group(1))
                             round_info = f'Round {round_number}'
 
+                    if not round_number:
+                        logger.warning(
+                            'Cannot parse Round number. Probably match is not regular round'
+                        )
+                        continue
+
                     # Find matches that belong to this specific round
                     # We need to iterate through siblings until we hit the next round
                     current_element = await round_container.query_selector(
@@ -917,38 +923,37 @@ class LivesportScraper:
             )
             return self.DEFAULT_SEASON
 
-    def _parse_match_date(
+    def _parse_datetime(
         self, date_text: str, season: int | None = None
     ) -> datetime | None:
-        """Parse match date from text like 'Aug 25\n12:00 AM'
+        """Parse datetime from text in various formats:
+        - 'Aug 25\n12:00 AM' (newline-separated)
+        - 'Aug 30 06:00 PM' (space-separated)
 
         Args:
             date_text: Date text to parse
             season: Optional season year. If None, uses DEFAULT_SEASON
         """
         try:
-            from datetime import datetime
-            import re
-
             # Use provided season or default
             if season is None:
                 season = self.DEFAULT_SEASON
 
-            # Clean the text and split by newline
-            lines = date_text.strip().split('\n')
-            if len(lines) < 2:
+            # Replace newlines with spaces and normalize whitespace
+            normalized_text = ' '.join(date_text.strip().split())
+
+            # Match pattern: "Month Day HH:MM AM/PM"
+            # e.g., "Aug 25 12:00 AM" or "Aug 30 06:00 PM"
+            pattern = r'(\w+)\s+(\d+)\s+(\d+):(\d+)\s+(AM|PM)'
+            match = re.match(pattern, normalized_text)
+            if not match:
                 return None
 
-            date_part = lines[0].strip()  # "Aug 25"
-            time_part = lines[1].strip()  # "12:00 AM"
-
-            # Parse the date part (e.g., "Aug 25")
-            date_match = re.match(r'(\w+)\s+(\d+)', date_part)
-            if not date_match:
-                return None
-
-            month_name = date_match.group(1)
-            day = int(date_match.group(2))
+            month_name = match.group(1)
+            day = int(match.group(2))
+            hour = int(match.group(3))
+            minute = int(match.group(4))
+            ampm = match.group(5)
 
             # Convert month name to number
             month_map = {
@@ -972,15 +977,6 @@ class LivesportScraper:
             month = month_map[month_name]
             year = season
 
-            # Parse the time part (e.g., "12:00 AM")
-            time_match = re.match(r'(\d+):(\d+)\s+(AM|PM)', time_part)
-            if not time_match:
-                return None
-
-            hour = int(time_match.group(1))
-            minute = int(time_match.group(2))
-            ampm = time_match.group(3)
-
             # Convert to 24-hour format
             if ampm == 'PM' and hour != 12:
                 hour += 12
@@ -990,8 +986,19 @@ class LivesportScraper:
             return datetime(year, month, day, hour, minute)
 
         except Exception as e:
-            logger.error(f'Error parsing date "{date_text}": {e}')
+            logger.error(f'Error parsing datetime "{date_text}": {e}')
             return None
+
+    def _parse_match_date(
+        self, date_text: str, season: int | None = None
+    ) -> datetime | None:
+        """Parse match date from text like 'Aug 25\n12:00 AM'
+
+        Args:
+            date_text: Date text to parse
+            season: Optional season year. If None, uses DEFAULT_SEASON
+        """
+        return self._parse_datetime(date_text, season)
 
     async def scrape_league_fixtures(
         self, country: str, league_name: str, season: int | None = None
@@ -1004,9 +1011,9 @@ class LivesportScraper:
             season: Optional season year (e.g., 2024). If None, parses season from page.
                     If provided, constructs URL for archived season (e.g., -2024-2025)
         """
-        # if season is not None:
-        #     logger.error('No fixtures for historical seasons are available')
-        #     return []
+        if season is not None:
+            logger.error('No fixtures for historical seasons are available')
+            return []
 
         logger.info(
             f'Scraping fixtures for {country}: {league_name} (season: {season})'
@@ -1288,68 +1295,7 @@ class LivesportScraper:
             date_text: Date text to parse
             season: Optional season year. If None, uses DEFAULT_SEASON
         """
-        try:
-            # Use provided season or default
-            if season is None:
-                season = self.DEFAULT_SEASON
-
-            # Clean the text
-            date_text = date_text.strip()
-
-            # Split into date and time parts
-            parts = date_text.split()
-            if len(parts) < 3:
-                return None
-
-            # Extract date parts (e.g., "Aug 30")
-            month_name = parts[0]
-            day = int(parts[1])
-
-            # Extract time parts (e.g., "06:00 PM")
-            time_part = ' '.join(parts[2:])
-
-            # Month mapping
-            month_map = {
-                'Jan': 1,
-                'Feb': 2,
-                'Mar': 3,
-                'Apr': 4,
-                'May': 5,
-                'Jun': 6,
-                'Jul': 7,
-                'Aug': 8,
-                'Sep': 9,
-                'Oct': 10,
-                'Nov': 11,
-                'Dec': 12,
-            }
-
-            if month_name not in month_map:
-                return None
-
-            month = month_map[month_name]
-            year = season
-
-            # Parse the time part (e.g., "06:00 PM")
-            time_match = re.match(r'(\d+):(\d+)\s+(AM|PM)', time_part)
-            if not time_match:
-                return None
-
-            hour = int(time_match.group(1))
-            minute = int(time_match.group(2))
-            ampm = time_match.group(3)
-
-            # Convert to 24-hour format
-            if ampm == 'PM' and hour != 12:
-                hour += 12
-            elif ampm == 'AM' and hour == 12:
-                hour = 0
-
-            return datetime(year, month, day, hour, minute)
-
-        except Exception as e:
-            logger.error(f'Error parsing fixture datetime "{date_text}": {e}')
-            return None
+        return self._parse_datetime(date_text, season)
 
     def _create_common_match_data(
         self,

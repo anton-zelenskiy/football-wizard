@@ -4,7 +4,7 @@ from enum import Enum
 DEFAULT_SEASON = 2025
 
 
-class Country(Enum):
+class Country(str, Enum):
     ENGLAND = 'England'
     SPAIN = 'Spain'
     GERMANY = 'Germany'
@@ -15,7 +15,7 @@ class Country(Enum):
     RUSSIA = 'Russia'
 
 
-class League(Enum):
+class League(str, Enum):
     PREMIER_LEAGUE = 'Premier League'
     LA_LIGA = 'LaLiga'
     BUNDESLIGA = 'Bundesliga'
@@ -23,7 +23,7 @@ class League(Enum):
     LIGUE_1 = 'Ligue 1'
     EREDIVISIE = 'Eredivisie'
     PRIMEIRA_LIGA = 'Primeira Liga'
-    RUSSIAN_PREMIER_LEAGUE = 'Russian Premier League'
+    RUSSIAN_PREMIER_LEAGUE = 'Premier League'
     FNL = 'FNL'
 
 

@@ -6,11 +6,11 @@ from app.bet_rules.bet_rules import (
     ConsecutiveDrawsRule,
     ConsecutiveLossesRule,
     Top5ConsecutiveLossesRule,
+    Top5ConsecutiveNoWinsRule,
 )
 from app.bet_rules.structures import (
     MatchSummary,
 )
-from app.settings import settings
 
 from .structures import TeamAnalysis
 
@@ -21,15 +21,12 @@ logger = structlog.get_logger()
 class BettingRulesEngine:
     """Betting rules engine with configurable rules"""
 
-    def __init__(self, rounds_back: int = 5) -> None:
-        self.top_teams_count = settings.top_teams_count
-        self.rounds_back = rounds_back
-
-        self.rules: list[BettingRule] = [
+    def __init__(self, rules: list[BettingRule] = None) -> None:
+        self.rules: list[BettingRule] = rules or [
             ConsecutiveLossesRule(),
             ConsecutiveDrawsRule(),
             Top5ConsecutiveLossesRule(),
-            # LiveMatchDrawRedCardRule(),
+            Top5ConsecutiveNoWinsRule(),
         ]
 
     def get_rule_by_slug(self, slug: str) -> BettingRule | None:

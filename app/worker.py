@@ -14,7 +14,7 @@ from app.settings import settings
 from app.tasks import (
     daily_scheduled_analysis,
     live_matches_analysis,
-    refresh_league_data,
+    refresh_all_leagues_data,
 )
 
 
@@ -33,7 +33,7 @@ class WorkerSettings:
         # Betting analysis tasks
         daily_scheduled_analysis,
         live_matches_analysis,
-        refresh_league_data,
+        refresh_all_leagues_data,
         # Test functions
         heartbeat,
     ]
@@ -49,13 +49,12 @@ class WorkerSettings:
             unique=True,
             job_id='daily_scheduled_analysis',
         ),
-        # League data refresh daily at 10 AM UTC
         cron(
-            refresh_league_data,
-            hour=10,
+            refresh_all_leagues_data,
+            hour=8,
             minute=0,
             unique=True,
-            job_id='refresh_league_data',
+            job_id='refresh_all_leagues_data',
         ),
         # Live matches analysis every 3 minutes (includes scraping and analysis)
         # cron(

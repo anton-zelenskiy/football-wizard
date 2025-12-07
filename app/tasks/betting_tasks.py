@@ -15,7 +15,9 @@ from app.db.repositories.league_repository import LeagueRepository
 from app.db.repositories.match_repository import MatchRepository
 from app.db.repositories.team_repository import TeamRepository
 from app.db.session import get_async_db_session
+from app.scraper.constants import LEAGUES_OF_INTEREST
 from app.scraper.livesport_scraper import CommonMatchData, LivesportScraper
+from app.settings import settings
 
 
 logger = structlog.get_logger()
@@ -191,51 +193,66 @@ class BettingTasks:
         )
         return saved_opportunities
 
-    async def refresh_league_data_task(self, ctx: dict, season: int = None) -> str:
-        """Refresh league standings and team statistics iteratively"""
-        logger.info('Starting league data refresh task')
+    async def refresh_league_data_task(
+        self,
+        ctx: dict,
+        season: int = None,
+        country: str = None,
+        league_name: str = None,
+    ) -> str:
+        """Refresh league standings and team statistics for a specific league.
+
+        Args:
+            ctx: Task context (unused but required by arq)
+            season: Optional season year (e.g., 2024). If None, uses current season.
+            country: Country name (e.g., 'England'). Required.
+            league_name: League name (e.g., 'Premier League'). Required.
+
+        Returns:
+            Summary string with statistics about the refresh operation
+        """
+        if not country or not league_name:
+            error_msg = 'Both country and league_name are required'
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        logger.info(
+            'Starting league data refresh task',
+            country=country,
+            league=league_name,
+            season=season,
+        )
 
         try:
-            total_leagues = 0
-            total_standings = 0
-            total_matches = 0
-            total_fixtures = 0
             all_coach_changes = []
 
-            # Get monitored leagues from a temporary scraper instance (just for config)
-            temp_scraper = LivesportScraper()
-            monitored_leagues = temp_scraper.monitored_leagues
+            # Process the specified league
+            try:
+                logger.info(f'Processing {country}: {league_name}')
 
-            # Process each league individually with its own context manager
-            for country, leagues in monitored_leagues.items():
-                for league_name in leagues:
-                    try:
-                        logger.info(f'Processing {country}: {league_name}')
+                # Use context manager for the league to minimize memory usage
+                async with LivesportScraper() as scraper:
+                    # Scrape and save league data iteratively
+                    league_stats = await self._process_single_league(
+                        scraper, country, league_name, season
+                    )
 
-                        # Use context manager for each individual league to minimize memory usage
-                        async with LivesportScraper() as scraper:
-                            # Scrape and save league data iteratively
-                            league_stats = await self._process_single_league(
-                                scraper, country, league_name, season
-                            )
+                total_standings = league_stats['standings_count']
+                total_matches = league_stats['matches_count']
+                total_fixtures = league_stats['fixtures_count']
+                all_coach_changes.extend(league_stats['coach_changes'])
 
-                        total_leagues += 1
-                        total_standings += league_stats['standings_count']
-                        total_matches += league_stats['matches_count']
-                        total_fixtures += league_stats['fixtures_count']
-                        all_coach_changes.extend(league_stats['coach_changes'])
+                logger.info(
+                    f'Completed {country}: {league_name} - '
+                    f'Standings: {league_stats["standings_count"]}, '
+                    f'Matches: {league_stats["matches_count"]}, '
+                    f'Fixtures: {league_stats["fixtures_count"]}, '
+                    f'Coach changes: {len(league_stats["coach_changes"])}'
+                )
 
-                        logger.info(
-                            f'Completed {country}: {league_name} - '
-                            f'Standings: {league_stats["standings_count"]}, '
-                            f'Matches: {league_stats["matches_count"]}, '
-                            f'Fixtures: {league_stats["fixtures_count"]}, '
-                            f'Coach changes: {len(league_stats["coach_changes"])}'
-                        )
-
-                    except Exception as e:
-                        logger.error(f'Error processing {country}: {league_name}: {e}')
-                        continue
+            except Exception as e:
+                logger.error(f'Error processing {country}: {league_name}: {e}')
+                raise
 
             # Send coach change notifications
             if all_coach_changes:
@@ -259,7 +276,7 @@ class BettingTasks:
 
             logger.info('League data refresh completed successfully')
             return (
-                f'Refreshed data for {total_leagues} leagues: '
+                f'Refreshed data for {country} - {league_name}: '
                 f'{total_standings} standings, {total_matches} matches, {total_fixtures} fixtures, '
                 f'{len(all_coach_changes)} coach changes'
             )
@@ -377,7 +394,7 @@ class BettingTasks:
                 match.home_team.id,
                 match.season,
                 before_date=match.match_date,
-                limit=self.rules_engine.rounds_back,
+                limit=settings.rounds_back,
             )
         )
         away_recent_matches = (
@@ -385,7 +402,7 @@ class BettingTasks:
                 match.away_team.id,
                 match.season,
                 before_date=match.match_date,
-                limit=self.rules_engine.rounds_back,
+                limit=settings.rounds_back,
             )
         )
 
@@ -399,6 +416,7 @@ class BettingTasks:
 
         home_rank = None
         away_rank = None
+        teams_count = None
         if match.season:
             async with get_async_db_session() as session:
                 standing_repo = TeamStandingRepository(session)
@@ -413,8 +431,17 @@ class BettingTasks:
                 if away_standing:
                     away_rank = away_standing.rank
 
+                # Get teams count from TeamStanding for this season (more accurate than league.teams)
+                # This avoids lazy loading issues and ensures consistency with analyze_match_by_id
+                teams_count_result = await standing_repo.get_standings_by_league_season(
+                    match.league.id, match.season
+                )
+                teams_count = len(teams_count_result) if teams_count_result else None
+
         # Create MatchSummary with recent matches and team data
-        match_summary = MatchSummary.from_match(match, home_rank, away_rank)
+        match_summary = MatchSummary.from_match(
+            match, home_rank, away_rank, teams_count=teams_count
+        )
         match_summary.home_recent_matches = home_matches_data
         match_summary.away_recent_matches = away_matches_data
 
@@ -440,4 +467,15 @@ async def refresh_league_data(
 ) -> None:
     """League data refresh task for arq"""
     tasks = BettingTasks()
-    return await tasks.refresh_league_data_task(ctx, season=season)
+    return await tasks.refresh_league_data_task(
+        ctx, season=season, country=country, league_name=league_name
+    )
+
+
+async def refresh_all_leagues_data(ctx, season: int = None) -> None:
+    """Refresh data for all leagues in LEAGUES_OF_INTEREST"""
+    for country, leagues in LEAGUES_OF_INTEREST.items():
+        for league in leagues:
+            await refresh_league_data(
+                ctx, season=season, country=country, league_name=league
+            )

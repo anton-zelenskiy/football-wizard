@@ -101,6 +101,8 @@ class BettingRule(BaseModel):
             'away_consecutive_losses': away_team_analysis.consecutive_losses,
             'home_consecutive_draws': home_team_analysis.consecutive_draws,
             'away_consecutive_draws': away_team_analysis.consecutive_draws,
+            'home_consecutive_no_wins': home_team_analysis.consecutive_no_wins,
+            'away_consecutive_no_wins': away_team_analysis.consecutive_no_wins,
             'home_consecutive_no_goals': home_team_analysis.consecutive_no_goals,
             'away_consecutive_no_goals': away_team_analysis.consecutive_no_goals,
             'team_analyzed': team_analyzed,
@@ -157,18 +159,34 @@ class ConsecutiveLossesRule(BettingRule):
         if team_analysis.consecutive_losses < 3:
             return 0.0
 
-        # Exclude teams in bottom 2 positions of the league
-        bottom_2_teams = match_summary.league.teams_count - 1  # For 20 teams: 19, 20
-        if team_analysis.team.rank >= bottom_2_teams:
+        # Exclude teams in bottom 3 positions of the league (improved from bottom 2)
+        # Analysis shows bottom teams have only 47.5% win rate
+        bottom_3_teams = (
+            match_summary.league.teams_count - 2
+        )  # For 20 teams: 18, 19, 20
+        if team_analysis.team.rank >= bottom_3_teams:
+            return 0.0
+
+        # Exclude cases where opponent is much stronger (rank difference < -5)
+        # Analysis shows these cases have only 40.4% win rate
+        rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
+        if rank_difference < -5:  # Opponent is much stronger (5+ positions better)
             return 0.0
 
         confidence = self._calculate_base_confidence(team_analysis)
 
-        rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
+        # Add bonus for rank difference when opponent is weaker
         if rank_difference > 0:  # Team we're betting on has higher rank (lower number)
             rank_bonus = 0.025 * rank_difference
             confidence += rank_bonus
             confidence = min(1.0, confidence)  # Cap at 1.0
+
+        # Add bonus for home team (analysis shows 63.0% vs 51.8% win rate)
+        # Check if this is the home team by comparing team names
+        if match_summary.home_team_data.name == team_analysis.team.name:
+            confidence += 0.06  # Home team bonus
+            confidence = min(1.0, confidence)  # Cap at 1.0
+
         return confidence
 
     def _evaluate_bet_outcome(
@@ -253,6 +271,59 @@ class Top5ConsecutiveLossesRule(BettingRule):
         self, match: 'MatchSummary', team_analyzed: str
     ) -> BetOutcome | None:
         """Evaluate bet outcome for top-5 consecutive losses rule (draw_or_win)"""
+        # For draw_or_win bet: our prediction wins if the team doesn't lose (wins or draws)
+        team_result = match.get_team_result(team_analyzed)
+        if team_result is None:  # Incomplete match
+            return None
+        elif team_result in [MatchResult.WIN, MatchResult.DRAW]:
+            return BetOutcome.WIN  # Our prediction was correct
+        else:  # team_result == MatchResult.LOSE
+            return BetOutcome.LOSE  # Our prediction was wrong
+
+
+class Top5ConsecutiveNoWinsRule(BettingRule):
+    """Rule: Team from top-5 and >= 3 consecutive matches without wins -> draw_or_win"""
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(
+            name='Top 5 Consecutive No Wins Rule',
+            description='Top 5 team with >= 3 consecutive matches without wins (draws or losses) -> draw_or_win',
+            slug='top5_consecutive_no_wins',
+            bet_type=BetType.DRAW_OR_WIN,
+            base_confidence=0.5,
+            **data,
+        )
+
+    def calculate_confidence(
+        self,
+        team_analysis: TeamAnalysis,
+        opponent_analysis: TeamAnalysis,
+        match_summary: 'MatchSummary' = None,
+    ) -> float:
+        """Calculate confidence for top 5 consecutive no wins rule"""
+        if not team_analysis.is_top5_team or team_analysis.consecutive_no_wins < 3:
+            return 0.0
+
+        confidence = self._calculate_base_confidence(team_analysis)
+
+        # Add bonus for rank difference when opponent is weaker
+        rank_difference = opponent_analysis.team.rank - team_analysis.team.rank
+        if rank_difference > 0:  # Team we're betting on has higher rank (lower number)
+            rank_bonus = 0.025 * rank_difference
+            confidence += rank_bonus
+            confidence = min(1.0, confidence)  # Cap at 1.0
+
+        # Add bonus for home team
+        if match_summary.home_team_data.name == team_analysis.team.name:
+            confidence += 0.05  # Home team bonus
+            confidence = min(1.0, confidence)  # Cap at 1.0
+
+        return confidence
+
+    def _evaluate_bet_outcome(
+        self, match: 'MatchSummary', team_analyzed: str
+    ) -> BetOutcome | None:
+        """Evaluate bet outcome for top-5 consecutive no wins rule (draw_or_win)"""
         # For draw_or_win bet: our prediction wins if the team doesn't lose (wins or draws)
         team_result = match.get_team_result(team_analyzed)
         if team_result is None:  # Incomplete match

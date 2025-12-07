@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     daily_analysis_hour: int = 9  # Hour to run daily analysis (UTC)
 
     # Betting Rules Configuration
+    rounds_back: int = 5
     top_teams_count: int = 8  # Number of teams considered "top"
     min_consecutive_losses: int = 3
     min_consecutive_draws: int = 3
