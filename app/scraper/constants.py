@@ -35,5 +35,5 @@ LEAGUES_OF_INTEREST = {
     Country.FRANCE: (League.LIGUE_1,),
     Country.NETHERLANDS: (League.EREDIVISIE,),
     Country.PORTUGAL: (League.PRIMEIRA_LIGA,),
-    Country.RUSSIA: (League.RUSSIAN_PREMIER_LEAGUE, League.FNL),
+    # Country.RUSSIA: (League.RUSSIAN_PREMIER_LEAGUE, League.FNL),
 }

@@ -109,6 +109,7 @@ class MatchRepository(BaseRepository[Match]):
                     minute=match_data.minute,
                     red_cards_home=match_data.red_cards_home,
                     red_cards_away=match_data.red_cards_away,
+                    match_date=match_data.match_date,
                 )
                 logger.info(
                     f'Updated existing match: {home_team.name} vs {away_team.name} ({match_data.status})'
@@ -122,7 +123,7 @@ class MatchRepository(BaseRepository[Match]):
                     away_team_id=away_team.id,
                     home_score=match_data.home_score,
                     away_score=match_data.away_score,
-                    match_date=match_data.match_date or datetime.now(),
+                    match_date=match_data.match_date,
                     season=season,
                     round=round_number,
                     status=match_data.status,
@@ -155,6 +156,7 @@ class MatchRepository(BaseRepository[Match]):
 
             old_status = match.status
             match.status = new_status
+            match.match_date = kwargs.get('match_date')
             match.updated_at = datetime.now()
 
             # Handle status-specific field updates

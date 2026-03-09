@@ -42,7 +42,7 @@ class LivesportScraper:
 
     DEFAULT_SEASON = DEFAULT_SEASON
 
-    def __init__(self, scrape_coaches: bool = False) -> None:
+    def __init__(self, scrape_coaches: bool = True) -> None:
         self.monitored_leagues = LEAGUES_OF_INTEREST
         self.browser_args = [
             '--no-sandbox',
@@ -166,7 +166,7 @@ class LivesportScraper:
                 return []
 
             # Parse season from the page
-            season = await self._parse_season_from_page(page)
+            season, _ = await self._parse_season_from_page(page)
             logger.info(f'Using season: {season}')
 
             # Click LIVE tab
@@ -369,7 +369,7 @@ class LivesportScraper:
 
             # Parse season from page if not provided
             if season is None:
-                parsed_season = await self._parse_season_from_page(page)
+                parsed_season, _ = await self._parse_season_from_page(page)
                 logger.info(f'Parsed season from page: {parsed_season}')
             else:
                 parsed_season = season
@@ -555,7 +555,7 @@ class LivesportScraper:
                 '.lineupTable.lineupTable--soccer'
             )
 
-            coach_name = None
+            coach_names = []
             # Find the table with title "Coach"
             for table in lineup_tables:
                 try:
@@ -565,25 +565,27 @@ class LivesportScraper:
 
                     title_text = await title_element.inner_text()
                     if title_text and title_text.strip() == 'Coach':
-                        # Found the coach table, now extract coach name
-                        coach_link = await table.query_selector(
+                        # Found the coach table, now extract all coach names
+                        coach_links = await table.query_selector_all(
                             'a.lineupTable__cell--name'
                         )
-                        if coach_link:
+                        for coach_link in coach_links:
                             coach_name = await coach_link.inner_text()
                             if coach_name:
-                                logger.debug(f'Found coach: {coach_name}')
-                                coach_name = coach_name.strip()
-                                break
+                                coach_name_clean = coach_name.strip()
+                                logger.debug(f'Found coach: {coach_name_clean}')
+                                coach_names.append(coach_name_clean)
+                        # Break after finding the Coach table to avoid checking other tables
+                        break
                 except Exception as e:
                     logger.debug(f'Error checking lineup table: {e}')
                     continue
 
-            if not coach_name:
+            if not coach_names:
                 logger.warning('Coach table not found on squad page')
                 return None
 
-            return coach_name
+            return ', '.join(coach_names)
 
         except Exception as e:
             logger.error(f'Error scraping team coach: {e}')
@@ -632,9 +634,12 @@ class LivesportScraper:
                 await self._load_all_results_rounds(page)
 
             # Parse season from page if not provided
+            is_cross_year = True  # Default to cross-year for monitored leagues
             if season is None:
-                parsed_season = await self._parse_season_from_page(page)
-                logger.info(f'Parsed season from page: {parsed_season}')
+                parsed_season, is_cross_year = await self._parse_season_from_page(page)
+                logger.info(
+                    f'Parsed season from page: {parsed_season}, cross-year: {is_cross_year}'
+                )
                 season = parsed_season
             else:
                 logger.info(f'Using provided season: {season}')
@@ -760,7 +765,7 @@ class LivesportScraper:
                                 date_text = await time_element.inner_text()
                                 if date_text:
                                     match_date = self._parse_match_date(
-                                        date_text, season
+                                        date_text, season, is_cross_year=is_cross_year
                                     )
 
                             # Create common match format
@@ -891,40 +896,48 @@ class LivesportScraper:
         except (ValueError, IndexError):
             return None
 
-    async def _parse_season_from_page(self, page: Page) -> int:
-        """Parse season from heading__info div (e.g., '2025/2026' -> 2025)"""
+    async def _parse_season_from_page(self, page: Page) -> tuple[int, bool]:
+        """Parse season from heading__info div (e.g., '2025/2026' -> 2025, True)
+
+        Returns:
+            Tuple of (season_start_year, is_cross_year)
+        """
         try:
             # Look for the season info div
             season_element = await page.query_selector('.heading__info')
             if not season_element:
                 logger.debug('No season info found, using default season')
-                return self.DEFAULT_SEASON
+                return self.DEFAULT_SEASON, True
 
             season_text = await season_element.inner_text()
             if not season_text:
                 logger.debug('Empty season text, using default season')
-                return self.DEFAULT_SEASON
+                return self.DEFAULT_SEASON, True
 
             # Extract first number before "/" from text like "2025/2026"
+            # If there's a "/", it's a cross-year season
+            is_cross_year = '/' in season_text
             season_match = re.search(r'^(\d+)', season_text.strip())
             if season_match:
                 season = int(season_match.group(1))
-                logger.debug(f'Parsed season: {season} from text: {season_text}')
-                return season
+                logger.debug(
+                    f'Parsed season: {season} (cross-year: {is_cross_year}) from text: {season_text}'
+                )
+                return season, is_cross_year
             else:
                 logger.debug(
                     f'Could not parse season from: {season_text}, using default'
                 )
-                return self.DEFAULT_SEASON
+                return self.DEFAULT_SEASON, True
 
         except Exception as e:
             logger.error(
                 f'Error parsing season: {e}, using default {self.DEFAULT_SEASON}'
             )
-            return self.DEFAULT_SEASON
+            return self.DEFAULT_SEASON, True
 
     def _parse_datetime(
-        self, date_text: str, season: int | None = None
+        self, date_text: str, season: int | None = None, is_cross_year: bool = True
     ) -> datetime | None:
         """Parse datetime from text in various formats:
         - 'Aug 25\n12:00 AM' (newline-separated)
@@ -933,6 +946,7 @@ class LivesportScraper:
         Args:
             date_text: Date text to parse
             season: Optional season year. If None, uses DEFAULT_SEASON
+            is_cross_year: Whether this is a cross-year season (e.g., 2024/2025)
         """
         try:
             # Use provided season or default
@@ -977,6 +991,12 @@ class LivesportScraper:
             month = month_map[month_name]
             year = season
 
+            # Logic for cross-year seasons (e.g., 2025/2026):
+            # Matches in early months (Jan-Jun) belong to the second year (2026).
+            # Matches in later months (Jul-Dec) belong to the first year (2025).
+            if is_cross_year and month < 7:
+                year = season + 1
+
             # Convert to 24-hour format
             if ampm == 'PM' and hour != 12:
                 hour += 12
@@ -990,15 +1010,16 @@ class LivesportScraper:
             return None
 
     def _parse_match_date(
-        self, date_text: str, season: int | None = None
+        self, date_text: str, season: int | None = None, is_cross_year: bool = True
     ) -> datetime | None:
         """Parse match date from text like 'Aug 25\n12:00 AM'
 
         Args:
             date_text: Date text to parse
             season: Optional season year. If None, uses DEFAULT_SEASON
+            is_cross_year: Whether this is a cross-year season
         """
-        return self._parse_datetime(date_text, season)
+        return self._parse_datetime(date_text, season, is_cross_year=is_cross_year)
 
     async def scrape_league_fixtures(
         self, country: str, league_name: str, season: int | None = None
@@ -1046,9 +1067,12 @@ class LivesportScraper:
                 return []
 
             # Parse season from page if not provided
+            is_cross_year = True  # Default to cross-year for monitored leagues
             if season is None:
-                parsed_season = await self._parse_season_from_page(page)
-                logger.info(f'Parsed season from page: {parsed_season}')
+                parsed_season, is_cross_year = await self._parse_season_from_page(page)
+                logger.info(
+                    f'Parsed season from page: {parsed_season}, cross-year: {is_cross_year}'
+                )
                 season = parsed_season
             else:
                 logger.info(f'Using provided season: {season}')
@@ -1057,7 +1081,9 @@ class LivesportScraper:
             await self._handle_cookie_banner(page)
 
             # Extract the first scheduled match only
-            fixtures = await self._extract_fixtures(page, country, league_name, season)
+            fixtures = await self._extract_fixtures(
+                page, country, league_name, season, is_cross_year=is_cross_year
+            )
 
             return fixtures
 
@@ -1066,7 +1092,12 @@ class LivesportScraper:
             return []
 
     async def _extract_fixtures(
-        self, page: 'Page', country: str, league_name: str, season: int
+        self,
+        page: 'Page',
+        country: str,
+        league_name: str,
+        season: int,
+        is_cross_year: bool = True,
     ) -> list[CommonMatchData]:
         """Extract fixture data from the page - find first scheduled round and scrape all its matches"""
         try:
@@ -1134,7 +1165,12 @@ class LivesportScraper:
                 # If we're collecting matches and this looks like a match element
                 if collecting_matches and await self._is_match_element(element):
                     fixture = await self._extract_single_fixture(
-                        element, country, league_name, round_number, season
+                        element,
+                        country,
+                        league_name,
+                        round_number,
+                        season,
+                        is_cross_year=is_cross_year,
                     )
                     if fixture:
                         fixtures.append(fixture)
@@ -1191,6 +1227,7 @@ class LivesportScraper:
         league_name: str,
         round_number: int = None,
         season: int | None = None,
+        is_cross_year: bool = True,
     ) -> CommonMatchData | None:
         """Extract a single fixture from a match element"""
         try:
@@ -1257,7 +1294,9 @@ class LivesportScraper:
             date_time_text = f'{date_part} {time_part}'
 
             # Parse the date and time
-            match_datetime = self._parse_fixture_datetime(date_time_text, season)
+            match_datetime = self._parse_fixture_datetime(
+                date_time_text, season, is_cross_year=is_cross_year
+            )
 
             if not match_datetime:
                 logger.warning(f'Could not parse datetime from: {date_time_text}')
@@ -1287,15 +1326,16 @@ class LivesportScraper:
             return None
 
     def _parse_fixture_datetime(
-        self, date_text: str, season: int | None = None
+        self, date_text: str, season: int | None = None, is_cross_year: bool = True
     ) -> datetime | None:
         """Parse fixture datetime from text like 'Aug 30 06:00 PM'
 
         Args:
             date_text: Date text to parse
             season: Optional season year. If None, uses DEFAULT_SEASON
+            is_cross_year: Whether this is a cross-year season
         """
-        return self._parse_datetime(date_text, season)
+        return self._parse_datetime(date_text, season, is_cross_year=is_cross_year)
 
     def _create_common_match_data(
         self,

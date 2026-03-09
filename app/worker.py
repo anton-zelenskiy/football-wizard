@@ -13,7 +13,6 @@ import structlog
 from app.settings import settings
 from app.tasks import (
     daily_scheduled_analysis,
-    live_matches_analysis,
     refresh_all_leagues_data,
 )
 
@@ -32,7 +31,6 @@ class WorkerSettings:
     functions = [
         # Betting analysis tasks
         daily_scheduled_analysis,
-        live_matches_analysis,
         refresh_all_leagues_data,
         # Test functions
         heartbeat,

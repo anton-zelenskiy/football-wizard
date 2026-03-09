@@ -231,7 +231,7 @@ class BettingTasks:
                 logger.info(f'Processing {country}: {league_name}')
 
                 # Use context manager for the league to minimize memory usage
-                async with LivesportScraper() as scraper:
+                async with LivesportScraper(scrape_coaches=False) as scraper:
                     # Scrape and save league data iteratively
                     league_stats = await self._process_single_league(
                         scraper, country, league_name, season
